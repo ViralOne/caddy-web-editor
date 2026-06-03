@@ -1,0 +1,43 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-config:/etc/caddy
+      - caddy-data:/data
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
+    networks:
+      - caddy-net
+
+  caddy-editor:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    env_file:
+      - .env
+    volumes:
+      - caddy-config:/etc/caddy
+      - caddy-backups:/backups
+    networks:
+      - caddy-net
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    networks:
+      - caddy-net
+
+volumes:
+  caddy-config:
+  caddy-data:
+  caddy-backups:
+
+networks:
+  caddy-net:
