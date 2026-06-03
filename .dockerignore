@@ -12,3 +12,7 @@ test-Caddyfile
 docker-compose*.yaml
 README.md
 *.egg-info/
+node_modules/
+package.json
+package-lock.json
+svc/static/js/editor-src.js

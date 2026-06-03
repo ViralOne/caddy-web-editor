@@ -1,0 +1,29 @@
+{
+  "name": "caddy-editor",
+  "version": "1.0.0",
+  "description": "Web UI to edit your Caddyfile. Google OAuth, backup/restore with diff, validate before save.",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild svc/static/js/editor-src.js --bundle --format=iife --outfile=svc/static/js/editor.bundle.js --minify"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ViralOne/caddy-web-editor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ViralOne/caddy-web-editor/issues"
+  },
+  "homepage": "https://github.com/ViralOne/caddy-web-editor#readme",
+  "devDependencies": {
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.43.0",
+    "codemirror": "^6.0.2",
+    "esbuild": "^0.28.0"
+  }
+}

@@ -17,12 +17,13 @@ Google OAuth redirect URI: `http://localhost:9090/auth/callback`
 Uses `docker-compose.prod.yaml` which runs 3 containers: caddy + caddy-editor + cloudflared.
 
 ```bash
-scp -r ./* root@YOUR_SERVER:/opt/caddy-editor/
 ssh root@YOUR_SERVER
+git clone https://github.com/ViralOne/caddy-web-editor.git /opt/caddy-editor
 cd /opt/caddy-editor
 
 # Create .env (see .env.example), set SERVER_URL to your production URL
 # Set TUNNEL_TOKEN from Cloudflare Zero Trust -> Tunnels
+cp .env.example .env && vim .env
 
 docker compose -f docker-compose.prod.yaml up -d --build
 ```
@@ -32,6 +33,17 @@ Google OAuth redirect URI: `https://editor.yourdomain.com/auth/callback`
 Cloudflare tunnel public hostnames:
 - `*.yourdomain.com` -> `http://caddy:80`
 - `editor.yourdomain.com` -> `http://caddy-editor:9090`
+
+## JS Editor (CodeMirror)
+
+The editor uses CodeMirror 6, bundled locally. To rebuild after changing `svc/static/js/editor-src.js`:
+
+```bash
+npm install
+npm run build
+```
+
+The bundle (`editor.bundle.js`) is committed — no build step needed on the server.
 
 ## Commands
 

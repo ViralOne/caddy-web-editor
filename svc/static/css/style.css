@@ -1,0 +1,105 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+
+/* Header */
+.header { padding: 8px 16px; background: #16213e; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #0f3460; flex-wrap: wrap; }
+.header h1 { font-size: 15px; font-weight: 600; color: #4fc3f7; margin-right: 8px; }
+
+/* Buttons */
+.btn { padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 11px; font-weight: 500; transition: all 0.15s; }
+.btn:active { transform: scale(0.96); }
+.btn-validate { background: #1e88e5; color: white; }
+.btn-validate:hover { background: #1565c0; }
+.btn-save { background: #43a047; color: white; }
+.btn-save:hover { background: #2e7d32; }
+.btn-tab { background: #263238; color: #90a4ae; border: 1px solid #37474f; }
+.btn-tab:hover { background: #37474f; color: white; }
+.btn-tab.active { background: #1e88e5; color: white; border-color: #1e88e5; }
+.btn-secondary { background: #37474f; color: #cfd8dc; }
+.btn-secondary:hover { background: #455a64; }
+.btn-danger { background: #c62828; color: white; font-size: 10px; padding: 4px 8px; }
+.btn-danger:hover { background: #b71c1c; }
+.btn-logout { background: none; border: none; color: #666; font-size: 11px; cursor: pointer; }
+.btn-logout:hover { color: #eee; }
+
+/* Tabs */
+.tabs { padding: 0 16px; background: #16213e; display: flex; gap: 4px; border-bottom: 1px solid #0f3460; }
+.tab { padding: 8px 14px; font-size: 12px; color: #90a4ae; cursor: pointer; border-bottom: 2px solid transparent; }
+.tab:hover { color: white; }
+.tab.active { color: #4fc3f7; border-bottom-color: #4fc3f7; }
+
+/* Main layout */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.tab-content { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+.tab-content.active { display: flex; }
+
+/* Editor */
+.editor-wrap { flex: 1; display: flex; position: relative; overflow: hidden; }
+#cm-editor { flex: 1; display: flex; }
+#cm-editor .cm-editor { width: 100%; height: 100%; }
+#cm-editor .cm-scroller { overflow: auto; }
+
+/* Footer */
+.footer { padding: 5px 16px; background: #16213e; border-top: 1px solid #0f3460; display: flex; align-items: center; gap: 12px; font-size: 11px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-dot.green { background: #66bb6a; }
+.status-dot.red { background: #ef5350; }
+.status-dot.yellow { background: #ffa726; }
+.status-msg { color: #90caf9; }
+.status-msg.ok { color: #66bb6a; }
+.status-msg.err { color: #ef5350; }
+.warnings { padding: 6px 16px; background: #332200; border-bottom: 1px solid #664400; font-size: 12px; color: #ffa726; display: none; max-height: 80px; overflow-y: auto; }
+.warnings.show { display: block; }
+.warnings div { padding: 2px 0; }
+.user-info { font-size: 11px; color: #607d8b; }
+.spacer { flex: 1; }
+.last-saved { font-size: 10px; color: #546e7a; }
+
+/* Panels */
+.panel { position: fixed; right: 0; top: 0; bottom: 0; width: 400px; background: #16213e; border-left: 1px solid #0f3460; overflow-y: auto; z-index: 50; transform: translateX(100%); transition: transform 0.2s; display: flex; flex-direction: column; }
+.panel.open { transform: translateX(0); }
+.panel-header { padding: 12px 16px; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 10px; }
+.panel-header h3 { font-size: 13px; color: #4fc3f7; }
+.panel-close { background: none; border: none; color: #aaa; font-size: 16px; cursor: pointer; margin-left: auto; }
+.panel-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+
+/* Site cards */
+.site-card { background: #0d1117; border-radius: 6px; padding: 12px; margin-bottom: 8px; border: 1px solid #21262d; }
+.site-card .domain { font-size: 13px; font-weight: 600; color: #4fc3f7; }
+.site-card .backend { font-size: 12px; color: #8b949e; margin-top: 4px; font-family: monospace; }
+.site-card .actions { margin-top: 8px; display: flex; gap: 6px; align-items: center; }
+.health-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+.health-badge.up { background: #1b3d1b; color: #66bb6a; }
+.health-badge.auth { background: #332b00; color: #ffa726; }
+.health-badge.down { background: #3d1b1b; color: #ef5350; }
+.health-badge.unknown { background: #263238; color: #607d8b; }
+.health-hint { font-size: 10px; color: #607d8b; margin-top: 2px; }
+
+/* Snippets & backups cards */
+.snippet-card { background: #0d1117; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; border: 1px solid #21262d; cursor: pointer; }
+.snippet-card:hover { border-color: #1e88e5; }
+.snippet-card .name { font-size: 12px; font-weight: 600; color: #eee; }
+.snippet-card .desc { font-size: 11px; color: #8b949e; margin-top: 2px; }
+
+/* Audit */
+.audit-item { padding: 6px 10px; margin-bottom: 4px; background: #0d1117; border-radius: 4px; font-size: 11px; font-family: monospace; }
+.audit-item .action { color: #ffa726; font-weight: 600; }
+.audit-item .user { color: #4fc3f7; }
+.audit-item .time { color: #555; }
+
+/* Status */
+.status-card { background: #0d1117; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; }
+.status-card label { color: #555; font-size: 10px; text-transform: uppercase; }
+.status-card .value { color: #eee; font-size: 12px; margin-top: 2px; }
+
+/* Search */
+.search-bar { padding: 6px 16px; background: #0d1117; border-bottom: 1px solid #21262d; display: none; align-items: center; gap: 8px; }
+.search-bar.open { display: flex; }
+.search-bar input { flex: 1; padding: 5px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #eee; font-size: 12px; outline: none; }
+.search-bar input:focus { border-color: #1e88e5; }
+
+/* Add site form */
+.add-form { background: #0d1117; border-radius: 6px; padding: 12px; margin-bottom: 12px; border: 1px solid #21262d; }
+.add-form input { width: 100%; padding: 7px 10px; margin-bottom: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #eee; font-size: 12px; outline: none; }
+.add-form input:focus { border-color: #1e88e5; }
+.add-form label { font-size: 11px; color: #8b949e; margin-bottom: 4px; display: block; }

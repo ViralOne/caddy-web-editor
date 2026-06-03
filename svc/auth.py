@@ -82,7 +82,8 @@ def callback():
 
 @auth_bp.route("/logout")
 def logout():
-    user = session.get("user", {}).get("email", "unknown")
-    log_action("logout", user)
+    user = session.get("user", {}).get("email")
+    if user:
+        log_action("logout", user)
     session.clear()
     return redirect("/")
