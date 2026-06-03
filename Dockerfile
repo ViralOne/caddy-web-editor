@@ -1,6 +1,6 @@
 FROM caddy:2.11.3-alpine AS caddy-bin
 
-FROM python:3.12-alpine
+FROM python:3.14-alpine
 
 RUN apk add --no-cache curl && pip install --no-cache-dir uv
 
