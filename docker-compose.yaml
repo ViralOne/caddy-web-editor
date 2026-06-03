@@ -1,0 +1,14 @@
+services:
+  caddy-editor:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    env_file:
+      - .env
+    volumes:
+      - ./test-Caddyfile:/etc/caddy/Caddyfile
+      - caddy-backups:/backups
+
+volumes:
+  caddy-backups:
