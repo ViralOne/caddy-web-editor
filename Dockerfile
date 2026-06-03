@@ -1,4 +1,4 @@
-FROM caddy:2-alpine AS caddy-bin
+FROM caddy:2.11.3-alpine AS caddy-bin
 
 FROM python:3.12-alpine
 
