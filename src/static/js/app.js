@@ -241,14 +241,27 @@ async function loadMetrics() {
 
       const headerDiv = el('div', 'site-metric-header');
       const domains = serverDomains[server];
-      const displayName = domains ? domains.join(', ') : server;
-      headerDiv.appendChild(el('span', 'site-metric-name', displayName));
+      const portMatch = domains && domains.length > 0 ? null : server;
+      let titleText;
+      if (domains && domains.length > 0) {
+        const isHTTPS = data.bytes_out > 0 || server === 'srv0';
+        titleText = (server === 'srv0' ? 'HTTPS (:443)' : server === 'srv1' ? 'HTTP (:80)' : server);
+      } else {
+        titleText = server;
+      }
+      headerDiv.appendChild(el('span', 'site-metric-name', titleText));
       if (data.error_rate > 0) {
         const errBadge = el('span', data.error_rate > 5 ? 'site-metric-err high' : 'site-metric-err low');
         errBadge.textContent = data.error_rate + '% errors';
         headerDiv.appendChild(errBadge);
       }
       card.appendChild(headerDiv);
+
+      if (domains && domains.length > 0) {
+        const domainList = el('div', 'site-metric-domains');
+        domainList.textContent = domains.join(', ');
+        card.appendChild(domainList);
+      }
 
       const stats = el('div', 'site-metric-stats');
       stats.appendChild(statPill('Requests', data.requests.toLocaleString(), '#4fc3f7'));

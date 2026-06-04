@@ -15,4 +15,4 @@ README.md
 node_modules/
 package.json
 package-lock.json
-svc/static/js/editor-src.js
+src/static/js/editor-src.js

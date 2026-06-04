@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from svc import create_app
+from src import create_app
 
 app = create_app()
 

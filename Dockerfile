@@ -11,7 +11,7 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir uv && uv sync --no-dev
 
 COPY app.py gunicorn.conf.py ./
-COPY svc/ svc/
+COPY src/ src/
 
 EXPOSE 9090
 
