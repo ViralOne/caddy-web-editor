@@ -146,6 +146,8 @@ def _get_server_domain_map():
         if resp.status_code != 200:
             return {}
         servers = resp.json()
+        if not isinstance(servers, dict):
+            return {}
         mapping = {}
         for srv_name, srv_config in servers.items():
             domains = []
@@ -154,11 +156,11 @@ def _get_server_domain_map():
                     hosts = match_set.get("host", [])
                     domains.extend(hosts)
             if domains:
-                mapping[srv_name] = domains
+                mapping[srv_name] = sorted(set(domains))
             else:
                 listen = srv_config.get("listen", [])
                 if listen:
-                    mapping[srv_name] = [", ".join(listen)]
+                    mapping[srv_name] = listen
         return mapping
     except Exception:
         return {}
