@@ -89,7 +89,6 @@ window.switchTab = function(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelector(`.tab-content#tab-${name}`).classList.add('active');
   event.target.classList.add('active');
-  if (name === 'sites') loadSites();
   if (name === 'metrics') loadMetrics();
 };
 
@@ -125,70 +124,182 @@ function showWarnings(warnings) {
 }
 function hideWarnings() { document.getElementById('warnings').classList.remove('show'); }
 
-async function loadSites() {
-  const res = await fetch('/api/sites'); const data = await res.json();
-  const list = document.getElementById('sites-list'); list.textContent = '';
-  if (!data.sites.length) { list.textContent = 'No sites found.'; return; }
-  const header = document.createElement('div'); header.style.cssText = 'margin-bottom:12px;display:flex;align-items:center;gap:8px';
-  const checkAllBtn = document.createElement('button'); checkAllBtn.className = 'btn btn-secondary'; checkAllBtn.textContent = 'Check All'; checkAllBtn.onclick = () => checkAllHealth(data.sites); header.appendChild(checkAllBtn);
-  const legend = document.createElement('span'); legend.style.cssText = 'font-size:10px;color:#607d8b'; legend.textContent = 'Green=OK | Orange=Auth required | Red=Down'; header.appendChild(legend);
-  list.appendChild(header);
-  data.sites.forEach(s => {
-    const card = document.createElement('div'); card.className = 'site-card';
-    const domainEl = document.createElement('div'); domainEl.className = 'domain'; domainEl.textContent = s.domain; card.appendChild(domainEl);
-    const backend = document.createElement('div'); backend.className = 'backend'; backend.textContent = s.backend || '(no reverse_proxy)'; card.appendChild(backend);
-    const actions = document.createElement('div'); actions.className = 'actions';
-    const btn = document.createElement('button'); btn.className = 'btn btn-secondary'; btn.textContent = 'Check'; btn.onclick = () => checkHealth(s.domain, btn); actions.appendChild(btn);
-    const badge = document.createElement('span'); badge.className = 'health-badge unknown'; badge.id = `health-${s.domain.replace(/\./g,'-')}`; badge.textContent = '?'; actions.appendChild(badge);
-    const removeBtn = document.createElement('button'); removeBtn.className = 'btn btn-danger'; removeBtn.textContent = 'Remove'; removeBtn.onclick = () => removeSite(s.domain); actions.appendChild(removeBtn);
-    card.appendChild(actions);
-    const hint = document.createElement('div'); hint.className = 'health-hint'; hint.id = `hint-${s.domain.replace(/\./g,'-')}`; card.appendChild(hint);
-    list.appendChild(card);
-  });
+// --- Metrics Tab ---
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
 }
 
-function removeSite(domain) {
-  if (!confirm(`Remove "${domain}"?\nUnsaved until you click Save & Reload.`)) return;
-  const lines = getContent().split('\n');
-  let startIdx = -1, braceDepth = 0, endIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const stripped = lines[i].trim();
-    if (startIdx === -1) { if (stripped.startsWith(domain) && stripped.endsWith('{')) { startIdx = i; braceDepth = 1; } }
-    else { braceDepth += (stripped.match(/\{/g)||[]).length; braceDepth -= (stripped.match(/\}/g)||[]).length; if (braceDepth <= 0) { endIdx = i; break; } }
+async function loadMetrics() {
+  const body = document.getElementById('metrics-body');
+  body.textContent = 'Loading metrics...';
+
+  const [metricsRes, trafficRes, upstreamsRes] = await Promise.all([
+    fetch('/api/metrics'),
+    fetch('/api/traffic'),
+    fetch('/api/upstreams'),
+  ]);
+
+  const metrics = await metricsRes.json();
+  const traffic = await trafficRes.json();
+  const upstreams = await upstreamsRes.json();
+
+  body.textContent = '';
+
+  // --- Overview Cards ---
+  const overviewSection = el('div', 'metrics-section');
+  overviewSection.appendChild(el('div', 'section-title', 'Overview'));
+
+  const overviewGrid = el('div', 'metrics-grid');
+  const totalReqs = traffic.totals ? traffic.totals.requests : 0;
+  const totalErrs = traffic.totals ? traffic.totals.errors : 0;
+  const inFlight = traffic.totals ? traffic.totals.in_flight : 0;
+  const bytesIn = traffic.totals ? traffic.totals.bytes_in : 0;
+  const bytesOut = traffic.totals ? traffic.totals.bytes_out : 0;
+  const errorRate = totalReqs > 0 ? (totalErrs / totalReqs * 100).toFixed(1) : '0.0';
+
+  overviewGrid.appendChild(metricCard('Total Requests', totalReqs.toLocaleString(), '#4fc3f7'));
+  overviewGrid.appendChild(metricCard('Error Rate', errorRate + '%', parseFloat(errorRate) > 5 ? '#ef5350' : '#66bb6a'));
+  overviewGrid.appendChild(metricCard('In Flight', inFlight.toString(), '#ce93d8'));
+  overviewGrid.appendChild(metricCard('Bandwidth In', formatBytes(bytesIn), '#ffa726'));
+  overviewGrid.appendChild(metricCard('Bandwidth Out', formatBytes(bytesOut), '#4fc3f7'));
+  overviewGrid.appendChild(metricCard('Sites', metrics.site_count.toString(), '#66bb6a'));
+  overviewGrid.appendChild(metricCard('Total Saves', metrics.total_saves.toString(), '#90a4ae'));
+  overviewGrid.appendChild(metricCard('Backups', metrics.backup_count.toString(), '#607d8b'));
+
+  overviewSection.appendChild(overviewGrid);
+  body.appendChild(overviewSection);
+
+  // --- Upstreams ---
+  const upstreamSection = el('div', 'metrics-section');
+  upstreamSection.appendChild(el('div', 'section-title', 'Upstream Backends'));
+
+  if (upstreams.error) {
+    upstreamSection.appendChild(el('div', 'metrics-hint', upstreams.error));
   }
-  if (startIdx === -1) { alert('Could not find site block.'); return; }
-  lines.splice(startIdx, endIdx - startIdx + 1);
-  if (lines[startIdx] === '') lines.splice(startIdx, 1);
-  setContent(lines.join('\n')); setDot('yellow'); setStatus(`Removed ${domain} (unsaved)`, 'info'); loadSites();
+
+  if (upstreams.upstreams && upstreams.upstreams.length > 0) {
+    const table = el('div', 'upstream-table');
+    const header = el('div', 'upstream-row upstream-header');
+    header.appendChild(el('span', 'upstream-cell', 'Address'));
+    header.appendChild(el('span', 'upstream-cell', 'Active Reqs'));
+    header.appendChild(el('span', 'upstream-cell', 'Fails'));
+    header.appendChild(el('span', 'upstream-cell', 'Health'));
+    table.appendChild(header);
+
+    upstreams.upstreams.forEach(u => {
+      const row = el('div', 'upstream-row');
+      row.appendChild(el('span', 'upstream-cell upstream-addr', u.address));
+      row.appendChild(el('span', 'upstream-cell', (u.num_requests || 0).toString()));
+
+      const failCell = el('span', 'upstream-cell');
+      failCell.textContent = (u.fails || 0).toString();
+      if (u.fails > 0) failCell.style.color = '#ef5350';
+      row.appendChild(failCell);
+
+      const healthVal = traffic.upstreams_healthy ? traffic.upstreams_healthy[u.address] : undefined;
+      const healthCell = el('span', 'upstream-cell');
+      const badge = document.createElement('span');
+      if (healthVal === 1) { badge.className = 'health-badge up'; badge.textContent = 'healthy'; }
+      else if (healthVal === 0) { badge.className = 'health-badge down'; badge.textContent = 'unhealthy'; }
+      else { badge.className = 'health-badge unknown'; badge.textContent = 'n/a'; }
+      healthCell.appendChild(badge);
+      row.appendChild(healthCell);
+
+      table.appendChild(row);
+    });
+    upstreamSection.appendChild(table);
+  } else if (!upstreams.error) {
+    upstreamSection.appendChild(el('div', 'metrics-hint', 'No upstreams registered. Caddy reports upstreams only after traffic flows through reverse_proxy.'));
+  }
+
+  body.appendChild(upstreamSection);
+
+  // --- Per-Site Traffic ---
+  const sitesSection = el('div', 'metrics-section');
+  sitesSection.appendChild(el('div', 'section-title', 'Per-Site Traffic'));
+
+  if (traffic.error && !Object.keys(traffic.sites).length) {
+    const hint = el('div', 'metrics-hint');
+    hint.textContent = traffic.error + '. Enable metrics in your Caddyfile global block: { servers { metrics } }';
+    sitesSection.appendChild(hint);
+  } else if (Object.keys(traffic.sites).length === 0) {
+    sitesSection.appendChild(el('div', 'metrics-hint', 'No traffic recorded yet. Metrics appear after requests flow through Caddy.'));
+  } else {
+    const sorted = Object.entries(traffic.sites).sort((a, b) => b[1].requests - a[1].requests);
+    sorted.forEach(([server, data]) => {
+      const card = el('div', 'site-metric-card');
+
+      const headerDiv = el('div', 'site-metric-header');
+      headerDiv.appendChild(el('span', 'site-metric-name', server));
+      if (data.error_rate > 0) {
+        const errBadge = el('span', data.error_rate > 5 ? 'site-metric-err high' : 'site-metric-err low');
+        errBadge.textContent = data.error_rate + '% errors';
+        headerDiv.appendChild(errBadge);
+      }
+      card.appendChild(headerDiv);
+
+      const stats = el('div', 'site-metric-stats');
+      stats.appendChild(statPill('Requests', data.requests.toLocaleString(), '#4fc3f7'));
+      stats.appendChild(statPill('Avg Latency', data.avg_latency_ms + ' ms', data.avg_latency_ms > 1000 ? '#ef5350' : data.avg_latency_ms > 300 ? '#ffa726' : '#66bb6a'));
+      stats.appendChild(statPill('5xx Errors', data.errors.toString(), data.errors > 0 ? '#ef5350' : '#66bb6a'));
+      stats.appendChild(statPill('In', formatBytes(data.bytes_in), '#90a4ae'));
+      stats.appendChild(statPill('Out', formatBytes(data.bytes_out), '#90a4ae'));
+      card.appendChild(stats);
+
+      sitesSection.appendChild(card);
+    });
+  }
+
+  body.appendChild(sitesSection);
+
+  // --- Editor Activity ---
+  const activitySection = el('div', 'metrics-section');
+  activitySection.appendChild(el('div', 'section-title', 'Editor Activity'));
+  const actGrid = el('div', 'metrics-grid');
+  actGrid.appendChild(metricCard('Saves Today', metrics.saves_today.toString(), '#ffa726'));
+  actGrid.appendChild(metricCard('Total Logins', metrics.total_logins.toString(), '#ce93d8'));
+  actGrid.appendChild(metricCard('Unique Users', metrics.unique_users.toString(), '#4fc3f7'));
+  actGrid.appendChild(metricCard('Config Lines', metrics.config_lines.toString(), '#607d8b'));
+  activitySection.appendChild(actGrid);
+  if (metrics.last_modified) {
+    activitySection.appendChild(el('div', 'metrics-footer', 'Last config change: ' + metrics.last_modified));
+  }
+  body.appendChild(activitySection);
 }
 
-async function checkHealth(domain, btn) {
-  btn.textContent = '...';
-  const res = await fetch('/api/health-check', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: domain}) });
-  const data = await res.json(); btn.textContent = 'Check';
-  const badge = document.getElementById(`health-${domain.replace(/\./g,'-')}`);
-  const hint = document.getElementById(`hint-${domain.replace(/\./g,'-')}`);
-  const ms = Math.round((data.time||0)*1000);
-  if (!data.ok || data.code === 0) { badge.className = 'health-badge down'; badge.textContent = 'unreachable'; hint.textContent = data.error || 'Connection failed'; }
-  else if (data.code >= 200 && data.code < 400) { badge.className = 'health-badge up'; badge.textContent = `${data.code} (${ms}ms)`; hint.textContent = ''; }
-  else if (data.code === 401 || data.code === 403) { badge.className = 'health-badge auth'; badge.textContent = `${data.code} (${ms}ms)`; hint.textContent = 'Reachable — app requires authentication'; }
-  else if (data.code >= 500) { badge.className = 'health-badge down'; badge.textContent = `${data.code} (${ms}ms)`; hint.textContent = 'Server error'; }
-  else { badge.className = 'health-badge auth'; badge.textContent = `${data.code} (${ms}ms)`; hint.textContent = 'Unexpected status'; }
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text) e.textContent = text;
+  return e;
 }
 
-async function checkAllHealth(sites) { for (const s of sites) { const btn = document.querySelector(`#health-${s.domain.replace(/\./g,'-')}`).parentElement.querySelector('.btn-secondary'); await checkHealth(s.domain, btn); } }
+function metricCard(label, value, color) {
+  const card = el('div', 'metric-card');
+  const lbl = el('div', 'metric-label', label);
+  const val = el('div', 'metric-value');
+  val.textContent = value;
+  val.style.color = color;
+  card.appendChild(lbl);
+  card.appendChild(val);
+  return card;
+}
 
-window.addSite = function() {
-  const domain = document.getElementById('new-domain').value.trim();
-  const backend = document.getElementById('new-backend').value.trim();
-  if (!domain || !backend) { alert('Fill in domain and backend'); return; }
-  setContent(getContent() + `\n${domain} {\n    reverse_proxy ${backend}\n}\n`);
-  setDot('yellow'); setStatus(`Added ${domain} (unsaved)`, 'info');
-  document.getElementById('new-domain').value = ''; document.getElementById('new-backend').value = '';
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-editor').classList.add('active'); document.querySelectorAll('.tab')[0].classList.add('active');
-};
+function statPill(label, value, color) {
+  const pill = el('span', 'stat-pill');
+  pill.appendChild(el('span', 'stat-pill-label', label));
+  const val = el('span', 'stat-pill-value');
+  val.textContent = value;
+  val.style.color = color;
+  pill.appendChild(val);
+  return pill;
+}
+
+// --- Panels ---
 
 window.togglePanel = function(name) {
   const panel = document.getElementById(`panel-${name}`); const isOpen = panel.classList.contains('open');
@@ -198,7 +309,7 @@ window.togglePanel = function(name) {
     panel.classList.add('open');
     const btn = document.getElementById(`panel-btn-${name}`);
     if (btn) btn.classList.add('panel-active');
-    if (name==='backups') loadBackups(); if (name==='audit') loadAudit(); if (name==='status') loadStatusPanel(); if (name==='snippets') loadSnippets(); if (name==='ssl') loadSSL();
+    if (name==='backups') loadBackups(); if (name==='audit') loadAudit(); if (name==='status') loadStatusPanel(); if (name==='snippets') loadSnippets();
   }
 };
 window.closePanel = function(name) {
@@ -316,66 +427,5 @@ function setStatus(msg, cls) { const el = document.getElementById('status-msg');
 function setDot(c) { document.getElementById('status-dot').className = 'status-dot ' + c; }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.panel').forEach(p=>p.classList.remove('open')); document.querySelectorAll('[id^="panel-btn-"]').forEach(b=>b.classList.remove('panel-active')); document.getElementById('search-bar').classList.remove('open'); } });
-
-// SSL panel
-async function loadSSL() {
-  const body = document.getElementById('ssl-body'); body.textContent = 'Checking certificates...';
-  const res = await fetch('/api/ssl'); const data = await res.json();
-  body.textContent = '';
-  if (!data.certs.length) { body.textContent = 'No domains found in Caddyfile.'; return; }
-  data.certs.forEach(c => {
-    const card = document.createElement('div'); card.className = 'status-card';
-    card.style.borderLeft = `3px solid ${c.status === 'ok' ? '#66bb6a' : c.status === 'warning' ? '#ffa726' : '#ef5350'}`;
-    const domain = document.createElement('div'); domain.style.cssText = 'font-weight:600;color:#4fc3f7;font-size:12px'; domain.textContent = c.domain;
-    card.appendChild(domain);
-    if (c.valid) {
-      const info = document.createElement('div'); info.className = 'value'; info.style.fontSize = '11px';
-      info.textContent = `Issuer: ${c.issuer} | Expires: ${c.expires.split('T')[0]} (${c.days_left} days)`;
-      card.appendChild(info);
-    } else {
-      const err = document.createElement('div'); err.className = 'value'; err.style.cssText = 'font-size:11px;color:#ef5350';
-      err.textContent = c.error || 'Could not check certificate';
-      card.appendChild(err);
-    }
-    body.appendChild(card);
-  });
-}
-
-// Metrics tab
-async function loadMetrics() {
-  const body = document.getElementById('metrics-body'); body.textContent = 'Loading...';
-  const res = await fetch('/api/metrics'); const data = await res.json();
-  body.textContent = '';
-
-  const grid = document.createElement('div');
-  grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px';
-
-  const cards = [
-    ['Sites', data.site_count, '#4fc3f7'],
-    ['Total Saves', data.total_saves, '#66bb6a'],
-    ['Saves Today', data.saves_today, '#ffa726'],
-    ['Total Logins', data.total_logins, '#ce93d8'],
-    ['Unique Users', data.unique_users, '#4fc3f7'],
-    ['Backups', data.backup_count, '#90a4ae'],
-    ['Config Lines', data.config_lines, '#607d8b'],
-  ];
-
-  cards.forEach(([label, value, color]) => {
-    const card = document.createElement('div'); card.className = 'status-card';
-    card.style.textAlign = 'center';
-    const val = document.createElement('div'); val.style.cssText = `font-size:28px;font-weight:700;color:${color};margin:8px 0`;
-    val.textContent = value;
-    const lbl = document.createElement('label'); lbl.textContent = label;
-    card.appendChild(lbl); card.appendChild(val);
-    grid.appendChild(card);
-  });
-  body.appendChild(grid);
-
-  if (data.last_modified) {
-    const footer = document.createElement('div'); footer.style.cssText = 'font-size:11px;color:#546e7a';
-    footer.textContent = `Last config change: ${data.last_modified}`;
-    body.appendChild(footer);
-  }
-}
 
 init();

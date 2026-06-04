@@ -7,7 +7,6 @@ from .auth import auth_bp, oauth
 from .config import AUTH_MODE
 from .routes.editor import editor_bp
 from .routes.ops import ops_bp
-from .routes.sites import sites_bp
 
 
 def create_app():
@@ -28,7 +27,6 @@ def create_app():
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(editor_bp)
-    app.register_blueprint(sites_bp)
     app.register_blueprint(ops_bp)
 
     @app.after_request

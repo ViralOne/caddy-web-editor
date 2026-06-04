@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -136,5 +137,14 @@ def delete_backup(name):
     os.remove(path)
     log_action("backup_deleted", user, safe_name)
     return jsonify({"ok": True, "message": f"Deleted {safe_name}"})
+
+
+@editor_bp.route("/api/snippets", methods=["GET"])
+@login_required
+def get_snippets():
+    snippets_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "snippets.json")
+    with open(snippets_path) as f:
+        snippets = json.load(f)
+    return jsonify({"snippets": snippets})
 
 

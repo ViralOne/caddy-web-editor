@@ -15,7 +15,6 @@
   <div class="btn-group">
     <button class="btn btn-secondary" id="panel-btn-snippets" onclick="togglePanel('snippets')">Snippets</button>
     <button class="btn btn-secondary" id="panel-btn-backups" onclick="togglePanel('backups')">Backups</button>
-    <button class="btn btn-secondary" id="panel-btn-ssl" onclick="togglePanel('ssl')">SSL</button>
     <button class="btn btn-secondary" id="panel-btn-audit" onclick="togglePanel('audit')">Audit</button>
     <button class="btn btn-secondary" id="panel-btn-status" onclick="togglePanel('status')">Status</button>
   </div>
@@ -26,7 +25,6 @@
 
 <div class="tabs">
   <div class="tab active" onclick="switchTab('editor')">Editor</div>
-  <div class="tab" onclick="switchTab('sites')">Sites</div>
   <div class="tab" onclick="switchTab('metrics')">Metrics</div>
 </div>
 
@@ -42,20 +40,10 @@
     <div class="editor-wrap" id="cm-editor" style="flex:1"></div>
   </div>
 
-  <div class="tab-content" id="tab-sites">
-    <div style="padding:16px;overflow-y:auto;flex:1">
-      <div class="add-form">
-        <label>Add New Site</label>
-        <input type="text" id="new-domain" placeholder="app.yourdomain.com">
-        <input type="text" id="new-backend" placeholder="10.0.0.1:8080">
-        <button class="btn btn-save" onclick="addSite()">Add to Caddyfile</button>
-      </div>
-      <div id="sites-list"></div>
-    </div>
-  </div>
-
   <div class="tab-content" id="tab-metrics">
-    <div style="padding:16px;overflow-y:auto;flex:1" id="metrics-body"></div>
+    <div style="padding:16px;overflow-y:auto;flex:1" id="metrics-body">
+      <div id="metrics-loading">Loading metrics...</div>
+    </div>
   </div>
 </div>
 
@@ -95,13 +83,6 @@
       </div>
     </div>
   </div>
-</div>
-
-
-<!-- SSL Panel -->
-<div class="panel" id="panel-ssl">
-  <div class="panel-header"><h3>SSL Certificates</h3><button class="panel-close" onclick="closePanel('ssl')">&times;</button></div>
-  <div class="panel-body" id="ssl-body"></div>
 </div>
 
 <!-- Audit Panel -->

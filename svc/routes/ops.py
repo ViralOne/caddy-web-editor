@@ -1,14 +1,14 @@
 import json
 import os
-import ssl
-import socket
+import re
 import subprocess
 from datetime import datetime
 
+import requests as http_client
 from flask import Blueprint, jsonify
 
 from ..auth import login_required
-from ..config import AUDIT_LOG, BACKUP_DIR, CADDYFILE
+from ..config import AUDIT_LOG, BACKUP_DIR, CADDY_API_URL, CADDYFILE
 
 ops_bp = Blueprint("ops", __name__)
 
@@ -53,59 +53,6 @@ def caddy_status():
         "config_path": CADDYFILE,
         "last_modified": last_modified,
     })
-
-
-@ops_bp.route("/api/ssl", methods=["GET"])
-@login_required
-def ssl_info():
-    with open(CADDYFILE) as f:
-        content = f.read()
-
-    domains = []
-    for line in content.split("\n"):
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and not stripped.startswith("{") and "{" in stripped:
-            domain = stripped.rstrip(" {").strip()
-            if "." in domain and not domain.startswith("*"):
-                domains.append(domain)
-
-    certs = []
-    for domain in domains:
-        certs.append(_get_cert_info(domain))
-
-    return jsonify({"certs": certs})
-
-
-def _get_cert_info(domain):
-    try:
-        ctx = ssl.create_default_context()
-        conn = ctx.wrap_socket(socket.socket(), server_hostname=domain)
-        conn.settimeout(5)
-        conn.connect((domain, 443))
-        cert = conn.getpeercert()
-        conn.close()
-
-        not_after = datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z")
-        not_before = datetime.strptime(cert["notBefore"], "%b %d %H:%M:%S %Y %Z")
-        days_left = (not_after - datetime.now()).days
-        issuer = dict(x[0] for x in cert.get("issuer", []))
-
-        return {
-            "domain": domain,
-            "valid": True,
-            "issuer": issuer.get("organizationName", issuer.get("commonName", "Unknown")),
-            "expires": not_after.isoformat(),
-            "issued": not_before.isoformat(),
-            "days_left": days_left,
-            "status": "ok" if days_left > 14 else "warning" if days_left > 0 else "expired",
-        }
-    except Exception as e:
-        return {
-            "domain": domain,
-            "valid": False,
-            "error": str(e),
-            "status": "error",
-        }
 
 
 @ops_bp.route("/api/metrics", methods=["GET"])
@@ -156,3 +103,145 @@ def metrics():
         "last_modified": last_modified,
         "config_lines": config_lines,
     })
+
+
+@ops_bp.route("/api/upstreams", methods=["GET"])
+@login_required
+def upstreams():
+    try:
+        resp = http_client.get(f"{CADDY_API_URL}/reverse_proxy/upstreams", timeout=5)
+        if resp.status_code == 200:
+            return jsonify({"upstreams": resp.json()})
+        return jsonify({"upstreams": [], "error": f"Caddy returned {resp.status_code}"})
+    except http_client.ConnectionError:
+        return jsonify({"upstreams": [], "error": "Caddy admin API not reachable"})
+    except Exception as e:
+        return jsonify({"upstreams": [], "error": str(e)})
+
+
+@ops_bp.route("/api/traffic", methods=["GET"])
+@login_required
+def traffic():
+    try:
+        resp = http_client.get(f"{CADDY_API_URL}/metrics", timeout=5)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Caddy returned {resp.status_code}", "sites": {}})
+        return jsonify(parse_prometheus_metrics(resp.text))
+    except http_client.ConnectionError:
+        return jsonify({"error": "Caddy metrics endpoint not reachable", "sites": {}})
+    except Exception as e:
+        return jsonify({"error": str(e), "sites": {}})
+
+
+def parse_prometheus_metrics(text):
+    sites = {}
+    totals = {
+        "requests": 0,
+        "errors": 0,
+        "in_flight": 0,
+        "bytes_in": 0,
+        "bytes_out": 0,
+    }
+    upstreams_healthy = {}
+
+    for line in text.split("\n"):
+        if line.startswith("#") or not line.strip():
+            continue
+
+        # caddy_http_requests_total{server="...",handler="...",code="...",method="..."}
+        m = re.match(r'caddy_http_requests_total\{([^}]+)\}\s+([\d.eE+]+)', line)
+        if m:
+            labels = _parse_labels(m.group(1))
+            count = int(float(m.group(2)))
+            server = labels.get("server", "unknown")
+            code = labels.get("code", "")
+            if server not in sites:
+                sites[server] = {"requests": 0, "errors": 0, "latency_sum": 0, "latency_count": 0, "bytes_in": 0, "bytes_out": 0}
+            sites[server]["requests"] += count
+            totals["requests"] += count
+            if code.startswith("5"):
+                sites[server]["errors"] += count
+                totals["errors"] += count
+            continue
+
+        # caddy_http_requests_in_flight{server="..."}
+        m = re.match(r'caddy_http_requests_in_flight\{([^}]+)\}\s+([\d.eE+]+)', line)
+        if m:
+            totals["in_flight"] += int(float(m.group(2)))
+            continue
+
+        # caddy_http_request_duration_seconds_sum{server="..."}
+        m = re.match(r'caddy_http_request_duration_seconds_sum\{([^}]+)\}\s+([\d.eE+]+)', line)
+        if m:
+            labels = _parse_labels(m.group(1))
+            server = labels.get("server", "unknown")
+            if server not in sites:
+                sites[server] = {"requests": 0, "errors": 0, "latency_sum": 0, "latency_count": 0, "bytes_in": 0, "bytes_out": 0}
+            sites[server]["latency_sum"] += float(m.group(2))
+            continue
+
+        # caddy_http_request_duration_seconds_count{server="..."}
+        m = re.match(r'caddy_http_request_duration_seconds_count\{([^}]+)\}\s+([\d.eE+]+)', line)
+        if m:
+            labels = _parse_labels(m.group(1))
+            server = labels.get("server", "unknown")
+            if server not in sites:
+                sites[server] = {"requests": 0, "errors": 0, "latency_sum": 0, "latency_count": 0, "bytes_in": 0, "bytes_out": 0}
+            sites[server]["latency_count"] += int(float(m.group(2)))
+            continue
+
+        # caddy_http_request_size_bytes_sum{server="..."}
+        m = re.match(r'caddy_http_request_size_bytes_sum\{([^}]+)\}\s+([\d.eE+]+)', line)
+        if m:
+            labels = _parse_labels(m.group(1))
+            server = labels.get("server", "unknown")
+            val = float(m.group(2))
+            if server in sites:
+                sites[server]["bytes_in"] += val
+            totals["bytes_in"] += val
+            continue
+
+        # caddy_http_response_size_bytes_sum{server="..."}
+        m = re.match(r'caddy_http_response_size_bytes_sum\{([^}]+)\}\s+([\d.eE+]+)', line)
+        if m:
+            labels = _parse_labels(m.group(1))
+            server = labels.get("server", "unknown")
+            val = float(m.group(2))
+            if server in sites:
+                sites[server]["bytes_out"] += val
+            totals["bytes_out"] += val
+            continue
+
+        # caddy_reverse_proxy_upstreams_healthy{upstream="..."}
+        m = re.match(r'caddy_reverse_proxy_upstreams_healthy\{([^}]+)\}\s+([\d.eE+]+)', line)
+        if m:
+            labels = _parse_labels(m.group(1))
+            upstream = labels.get("upstream", "unknown")
+            upstreams_healthy[upstream] = int(float(m.group(2)))
+            continue
+
+    site_list = {}
+    for server, data in sites.items():
+        avg_latency = (data["latency_sum"] / data["latency_count"] * 1000) if data["latency_count"] > 0 else 0
+        error_rate = (data["errors"] / data["requests"] * 100) if data["requests"] > 0 else 0
+        site_list[server] = {
+            "requests": data["requests"],
+            "errors": data["errors"],
+            "error_rate": round(error_rate, 2),
+            "avg_latency_ms": round(avg_latency, 1),
+            "bytes_in": int(data["bytes_in"]),
+            "bytes_out": int(data["bytes_out"]),
+        }
+
+    return {
+        "sites": site_list,
+        "totals": totals,
+        "upstreams_healthy": upstreams_healthy,
+    }
+
+
+def _parse_labels(label_str):
+    labels = {}
+    for m in re.finditer(r'(\w+)="([^"]*)"', label_str):
+        labels[m.group(1)] = m.group(2)
+    return labels
