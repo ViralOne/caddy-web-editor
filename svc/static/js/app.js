@@ -205,7 +205,12 @@ async function loadMetrics() {
       const badge = document.createElement('span');
       if (healthVal === 1) { badge.className = 'health-badge up'; badge.textContent = 'healthy'; }
       else if (healthVal === 0) { badge.className = 'health-badge down'; badge.textContent = 'unhealthy'; }
-      else { badge.className = 'health-badge unknown'; badge.textContent = 'n/a'; }
+      else {
+        badge.className = 'health-badge unknown has-tooltip';
+        badge.textContent = 'n/a';
+        const tooltip = el('span', 'badge-tooltip', 'No active health check. Add inside reverse_proxy { }:\n\nreverse_proxy 10.0.0.1:8080 {\n    health_uri /\n    health_interval 30s\n}');
+        badge.appendChild(tooltip);
+      }
       healthCell.appendChild(badge);
       row.appendChild(healthCell);
 
@@ -224,17 +229,20 @@ async function loadMetrics() {
 
   if (traffic.error && !Object.keys(traffic.sites).length) {
     const hint = el('div', 'metrics-hint');
-    hint.textContent = traffic.error + '. Enable metrics in your Caddyfile global block: { servers { metrics } }';
+    hint.textContent = traffic.error;
     sitesSection.appendChild(hint);
   } else if (Object.keys(traffic.sites).length === 0) {
     sitesSection.appendChild(el('div', 'metrics-hint', 'No traffic recorded yet. Metrics appear after requests flow through Caddy.'));
   } else {
+    const serverDomains = traffic.server_domains || {};
     const sorted = Object.entries(traffic.sites).sort((a, b) => b[1].requests - a[1].requests);
     sorted.forEach(([server, data]) => {
       const card = el('div', 'site-metric-card');
 
       const headerDiv = el('div', 'site-metric-header');
-      headerDiv.appendChild(el('span', 'site-metric-name', server));
+      const domains = serverDomains[server];
+      const displayName = domains ? domains.join(', ') : server;
+      headerDiv.appendChild(el('span', 'site-metric-name', displayName));
       if (data.error_rate > 0) {
         const errBadge = el('span', data.error_rate > 5 ? 'site-metric-err high' : 'site-metric-err low');
         errBadge.textContent = data.error_rate + '% errors';

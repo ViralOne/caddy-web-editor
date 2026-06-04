@@ -124,13 +124,44 @@ def upstreams():
 def traffic():
     try:
         resp = http_client.get(f"{CADDY_API_URL}/metrics", timeout=5)
+        if resp.status_code == 404:
+            return jsonify({"error": "Metrics endpoint not found (404). Add to global block: servers { metrics }", "sites": {}})
         if resp.status_code != 200:
-            return jsonify({"error": f"Caddy returned {resp.status_code}", "sites": {}})
-        return jsonify(parse_prometheus_metrics(resp.text))
-    except http_client.ConnectionError:
-        return jsonify({"error": "Caddy metrics endpoint not reachable", "sites": {}})
+            return jsonify({"error": f"Caddy returned HTTP {resp.status_code}: {resp.text[:200]}", "sites": {}})
+        if "caddy_" not in resp.text:
+            return jsonify({"error": "Response doesn't contain Caddy metrics. Check Caddy version supports metrics.", "sites": {}})
+        result = parse_prometheus_metrics(resp.text)
+        result["server_domains"] = _get_server_domain_map()
+        return jsonify(result)
+    except http_client.ConnectionError as e:
+        return jsonify({"error": f"Connection failed to {CADDY_API_URL}/metrics: {e}", "sites": {}})
     except Exception as e:
-        return jsonify({"error": str(e), "sites": {}})
+        return jsonify({"error": f"{type(e).__name__}: {e}", "sites": {}})
+
+
+def _get_server_domain_map():
+    """Fetch running config and map server names (srv0, srv1) to their domains."""
+    try:
+        resp = http_client.get(f"{CADDY_API_URL}/config/apps/http/servers", timeout=3)
+        if resp.status_code != 200:
+            return {}
+        servers = resp.json()
+        mapping = {}
+        for srv_name, srv_config in servers.items():
+            domains = []
+            for route in srv_config.get("routes", []):
+                for match_set in route.get("match", []):
+                    hosts = match_set.get("host", [])
+                    domains.extend(hosts)
+            if domains:
+                mapping[srv_name] = domains
+            else:
+                listen = srv_config.get("listen", [])
+                if listen:
+                    mapping[srv_name] = [", ".join(listen)]
+        return mapping
+    except Exception:
+        return {}
 
 
 def parse_prometheus_metrics(text):
@@ -149,7 +180,7 @@ def parse_prometheus_metrics(text):
             continue
 
         # caddy_http_requests_total{server="...",handler="...",code="...",method="..."}
-        m = re.match(r'caddy_http_requests_total\{([^}]+)\}\s+([\d.eE+]+)', line)
+        m = re.match(r'caddy_http_requests_total\{([^}]+)\}\s+([\d.eE+-]+)', line)
         if m:
             labels = _parse_labels(m.group(1))
             count = int(float(m.group(2)))
@@ -165,13 +196,13 @@ def parse_prometheus_metrics(text):
             continue
 
         # caddy_http_requests_in_flight{server="..."}
-        m = re.match(r'caddy_http_requests_in_flight\{([^}]+)\}\s+([\d.eE+]+)', line)
+        m = re.match(r'caddy_http_requests_in_flight\{([^}]+)\}\s+([\d.eE+-]+)', line)
         if m:
             totals["in_flight"] += int(float(m.group(2)))
             continue
 
         # caddy_http_request_duration_seconds_sum{server="..."}
-        m = re.match(r'caddy_http_request_duration_seconds_sum\{([^}]+)\}\s+([\d.eE+]+)', line)
+        m = re.match(r'caddy_http_request_duration_seconds_sum\{([^}]+)\}\s+([\d.eE+-]+)', line)
         if m:
             labels = _parse_labels(m.group(1))
             server = labels.get("server", "unknown")
@@ -181,7 +212,7 @@ def parse_prometheus_metrics(text):
             continue
 
         # caddy_http_request_duration_seconds_count{server="..."}
-        m = re.match(r'caddy_http_request_duration_seconds_count\{([^}]+)\}\s+([\d.eE+]+)', line)
+        m = re.match(r'caddy_http_request_duration_seconds_count\{([^}]+)\}\s+([\d.eE+-]+)', line)
         if m:
             labels = _parse_labels(m.group(1))
             server = labels.get("server", "unknown")
@@ -191,7 +222,7 @@ def parse_prometheus_metrics(text):
             continue
 
         # caddy_http_request_size_bytes_sum{server="..."}
-        m = re.match(r'caddy_http_request_size_bytes_sum\{([^}]+)\}\s+([\d.eE+]+)', line)
+        m = re.match(r'caddy_http_request_size_bytes_sum\{([^}]+)\}\s+([\d.eE+-]+)', line)
         if m:
             labels = _parse_labels(m.group(1))
             server = labels.get("server", "unknown")
@@ -202,7 +233,7 @@ def parse_prometheus_metrics(text):
             continue
 
         # caddy_http_response_size_bytes_sum{server="..."}
-        m = re.match(r'caddy_http_response_size_bytes_sum\{([^}]+)\}\s+([\d.eE+]+)', line)
+        m = re.match(r'caddy_http_response_size_bytes_sum\{([^}]+)\}\s+([\d.eE+-]+)', line)
         if m:
             labels = _parse_labels(m.group(1))
             server = labels.get("server", "unknown")
@@ -213,7 +244,7 @@ def parse_prometheus_metrics(text):
             continue
 
         # caddy_reverse_proxy_upstreams_healthy{upstream="..."}
-        m = re.match(r'caddy_reverse_proxy_upstreams_healthy\{([^}]+)\}\s+([\d.eE+]+)', line)
+        m = re.match(r'caddy_reverse_proxy_upstreams_healthy\{([^}]+)\}\s+([\d.eE+-]+)', line)
         if m:
             labels = _parse_labels(m.group(1))
             upstream = labels.get("upstream", "unknown")
