@@ -8,6 +8,23 @@ DOMAIN_RE = re.compile(
 )
 
 
+def caddy_fmt(content: str) -> str:
+    """Format Caddyfile content using caddy fmt."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".caddyfile", delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    result = subprocess.run(
+        ["caddy", "fmt", tmp_path],
+        capture_output=True, text=True,
+    )
+    os.remove(tmp_path)
+
+    if result.returncode == 0 and result.stdout:
+        return result.stdout
+    return content
+
+
 def caddy_validate(content: str) -> tuple[bool, str]:
     """Run caddy validate and return (is_valid, message)."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".caddyfile", delete=False) as tmp:

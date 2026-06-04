@@ -87,13 +87,15 @@ window.switchTab = function(name) {
   document.querySelector(`.tab-content#tab-${name}`).classList.add('active');
   event.target.classList.add('active');
   if (name === 'sites') loadSites();
+  if (name === 'metrics') loadMetrics();
 };
 
 window.doValidate = async function() {
-  setStatus('Validating...', 'info'); hideWarnings();
+  setStatus('Validating + formatting...', 'info'); hideWarnings();
   const res = await fetch('/api/validate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content: getContent()}) });
   const data = await res.json();
-  if (data.valid && !data.warnings.length) { setStatus('Valid config', 'ok'); setDot('green'); }
+  if (data.formatted) { setContent(data.formatted); setStatus('Formatted + valid', 'ok'); setDot('green'); }
+  else if (data.valid && !data.warnings.length) { setStatus('Valid config', 'ok'); setDot('green'); }
   else if (data.valid && data.warnings.length) { setStatus('Valid with warnings', 'ok'); setDot('yellow'); showWarnings(data.warnings); }
   else { setStatus(data.message, 'err'); setDot('red'); }
 };
@@ -109,7 +111,7 @@ window.doSave = async function() {
   setStatus('Saving...', 'info');
   const res = await fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content}) });
   const data = await res.json();
-  if (data.ok) { setStatus(data.message, 'ok'); setDot('green'); originalContent = content; lastSavedTime = Date.now(); lastSavedBy = document.getElementById('user-info').textContent; updateLastSaved(); hideWarnings(); }
+  if (data.ok) { if (data.content) setContent(data.content); originalContent = data.content || content; setStatus(data.message, 'ok'); setDot('green'); lastSavedTime = Date.now(); lastSavedBy = document.getElementById('user-info').textContent; updateLastSaved(); hideWarnings(); }
   else { setStatus(data.message, 'err'); setDot('red'); }
 };
 
@@ -193,7 +195,7 @@ window.togglePanel = function(name) {
     panel.classList.add('open');
     const btn = document.getElementById(`panel-btn-${name}`);
     if (btn) btn.classList.add('panel-active');
-    if (name==='backups') loadBackups(); if (name==='audit') loadAudit(); if (name==='status') loadStatusPanel(); if (name==='snippets') loadSnippets();
+    if (name==='backups') loadBackups(); if (name==='audit') loadAudit(); if (name==='status') loadStatusPanel(); if (name==='snippets') loadSnippets(); if (name==='ssl') loadSSL();
   }
 };
 window.closePanel = function(name) {
@@ -286,5 +288,66 @@ function setStatus(msg, cls) { const el = document.getElementById('status-msg');
 function setDot(c) { document.getElementById('status-dot').className = 'status-dot ' + c; }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.panel').forEach(p=>p.classList.remove('open')); document.querySelectorAll('[id^="panel-btn-"]').forEach(b=>b.classList.remove('panel-active')); document.getElementById('search-bar').classList.remove('open'); } });
+
+// SSL panel
+async function loadSSL() {
+  const body = document.getElementById('ssl-body'); body.textContent = 'Checking certificates...';
+  const res = await fetch('/api/ssl'); const data = await res.json();
+  body.textContent = '';
+  if (!data.certs.length) { body.textContent = 'No domains found in Caddyfile.'; return; }
+  data.certs.forEach(c => {
+    const card = document.createElement('div'); card.className = 'status-card';
+    card.style.borderLeft = `3px solid ${c.status === 'ok' ? '#66bb6a' : c.status === 'warning' ? '#ffa726' : '#ef5350'}`;
+    const domain = document.createElement('div'); domain.style.cssText = 'font-weight:600;color:#4fc3f7;font-size:12px'; domain.textContent = c.domain;
+    card.appendChild(domain);
+    if (c.valid) {
+      const info = document.createElement('div'); info.className = 'value'; info.style.fontSize = '11px';
+      info.textContent = `Issuer: ${c.issuer} | Expires: ${c.expires.split('T')[0]} (${c.days_left} days)`;
+      card.appendChild(info);
+    } else {
+      const err = document.createElement('div'); err.className = 'value'; err.style.cssText = 'font-size:11px;color:#ef5350';
+      err.textContent = c.error || 'Could not check certificate';
+      card.appendChild(err);
+    }
+    body.appendChild(card);
+  });
+}
+
+// Metrics tab
+async function loadMetrics() {
+  const body = document.getElementById('metrics-body'); body.textContent = 'Loading...';
+  const res = await fetch('/api/metrics'); const data = await res.json();
+  body.textContent = '';
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px';
+
+  const cards = [
+    ['Sites', data.site_count, '#4fc3f7'],
+    ['Total Saves', data.total_saves, '#66bb6a'],
+    ['Saves Today', data.saves_today, '#ffa726'],
+    ['Total Logins', data.total_logins, '#ce93d8'],
+    ['Unique Users', data.unique_users, '#4fc3f7'],
+    ['Backups', data.backup_count, '#90a4ae'],
+    ['Config Lines', data.config_lines, '#607d8b'],
+  ];
+
+  cards.forEach(([label, value, color]) => {
+    const card = document.createElement('div'); card.className = 'status-card';
+    card.style.textAlign = 'center';
+    const val = document.createElement('div'); val.style.cssText = `font-size:28px;font-weight:700;color:${color};margin:8px 0`;
+    val.textContent = value;
+    const lbl = document.createElement('label'); lbl.textContent = label;
+    card.appendChild(lbl); card.appendChild(val);
+    grid.appendChild(card);
+  });
+  body.appendChild(grid);
+
+  if (data.last_modified) {
+    const footer = document.createElement('div'); footer.style.cssText = 'font-size:11px;color:#546e7a';
+    footer.textContent = `Last config change: ${data.last_modified}`;
+    body.appendChild(footer);
+  }
+}
 
 init();

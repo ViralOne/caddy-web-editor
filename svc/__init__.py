@@ -29,4 +29,14 @@ def create_app():
     app.register_blueprint(sites_bp)
     app.register_blueprint(ops_bp)
 
+    @app.after_request
+    def security_headers(response):
+        response.headers["Server"] = "Microsoft-IIS/10.0"
+        response.headers["X-Powered-By"] = "ASP.NET"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
     return app

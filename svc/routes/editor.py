@@ -8,7 +8,8 @@ from flask import Blueprint, jsonify, render_template, request, session
 from ..audit import log_action
 from ..auth import login_required
 from ..config import BACKUP_DIR, CADDYFILE
-from ..validator import caddy_validate, smart_validate
+from ..validator import caddy_fmt, caddy_validate, smart_validate
+
 
 editor_bp = Blueprint("editor", __name__)
 
@@ -17,6 +18,11 @@ editor_bp = Blueprint("editor", __name__)
 @login_required
 def index():
     return render_template("index.html")
+
+
+@editor_bp.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
 
 
 @editor_bp.route("/api/me")
@@ -32,22 +38,32 @@ def get_caddyfile():
         return jsonify({"content": f.read()})
 
 
+@editor_bp.route("/api/fmt", methods=["POST"])
+@login_required
+def fmt():
+    data = request.json or {}
+    content = data.get("content", "")
+    formatted = caddy_fmt(content)
+    return jsonify({"content": formatted, "changed": formatted != content})
+
+
 @editor_bp.route("/api/validate", methods=["POST"])
 @login_required
 def validate():
     data = request.json or {}
     content = data.get("content", "")
 
-    warnings = smart_validate(content)
-    is_valid, message = caddy_validate(content)
+    formatted = caddy_fmt(content)
+    warnings = smart_validate(formatted)
+    is_valid, message = caddy_validate(formatted)
 
     if not is_valid:
-        return jsonify({"valid": False, "message": message, "warnings": []})
+        return jsonify({"valid": False, "message": message, "warnings": [], "formatted": None})
 
     if warnings:
-        return jsonify({"valid": True, "message": "Caddy valid, but check warnings", "warnings": warnings})
+        return jsonify({"valid": True, "message": "Caddy valid, but check warnings", "warnings": warnings, "formatted": formatted if formatted != content else None})
 
-    return jsonify({"valid": True, "message": "Config is valid", "warnings": []})
+    return jsonify({"valid": True, "message": "Config is valid", "warnings": [], "formatted": formatted if formatted != content else None})
 
 
 @editor_bp.route("/api/save", methods=["POST"])
@@ -56,6 +72,8 @@ def save():
     data = request.json or {}
     content = data.get("content", "")
     user = session.get("user", {}).get("email", "unknown")
+
+    content = caddy_fmt(content)
 
     is_valid, message = caddy_validate(content)
     if not is_valid:
@@ -75,11 +93,11 @@ def save():
 
     if reload_result.returncode == 0:
         log_action("save_reload", user, f"backup={backup_name}")
-        return jsonify({"ok": True, "message": f"Saved and reloaded by {user}"})
+        return jsonify({"ok": True, "message": f"Saved and reloaded by {user}", "content": content})
 
     if "connection refused" in reload_result.stderr:
         log_action("save_no_reload", user, f"backup={backup_name}, caddy not running")
-        return jsonify({"ok": True, "message": f"Saved by {user} (Caddy not running — reload skipped)"})
+        return jsonify({"ok": True, "message": f"Saved by {user} (Caddy not running — reload skipped)", "content": content})
 
     log_action("reload_failed", user, reload_result.stderr[:200])
     return jsonify({"ok": False, "message": f"Saved but reload failed: {reload_result.stderr}"}), 500
@@ -104,3 +122,5 @@ def get_backup(name):
         return jsonify({"error": "not found"}), 404
     with open(path) as f:
         return jsonify({"content": f.read()})
+
+

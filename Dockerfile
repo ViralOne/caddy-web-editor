@@ -2,17 +2,17 @@ FROM caddy:2.11.3-alpine AS caddy-bin
 
 FROM python:3.14-alpine
 
-RUN apk add --no-cache curl && pip install --no-cache-dir uv
+RUN apk add --no-cache curl openssl
 
 COPY --from=caddy-bin /usr/bin/caddy /usr/bin/caddy
 
 WORKDIR /app
 COPY pyproject.toml .
-RUN uv sync --no-dev
+RUN pip install --no-cache-dir uv && uv sync --no-dev
 
-COPY app.py .
+COPY app.py gunicorn.conf.py ./
 COPY svc/ svc/
 
 EXPOSE 9090
 
-CMD ["uv", "run", "app.py"]
+CMD ["uv", "run", "gunicorn", "app:app", "-b", "0.0.0.0:9090", "-w", "1", "--access-logfile", "-", "-c", "gunicorn.conf.py"]
