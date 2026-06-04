@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/ViralOne/caddy-web-editor#readme",
   "devDependencies": {
+    "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
     "@codemirror/state": "^6.6.0",
     "@codemirror/theme-one-dark": "^6.1.3",

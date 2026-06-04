@@ -125,3 +125,16 @@ def get_backup(name):
         return jsonify({"content": f.read()})
 
 
+@editor_bp.route("/api/backups/<name>", methods=["DELETE"])
+@login_required
+def delete_backup(name):
+    safe_name = os.path.basename(name)
+    path = os.path.join(BACKUP_DIR, safe_name)
+    if not os.path.isfile(path):
+        return jsonify({"error": "not found"}), 404
+    user = session.get("user", {}).get("email", "unknown")
+    os.remove(path)
+    log_action("backup_deleted", user, safe_name)
+    return jsonify({"ok": True, "message": f"Deleted {safe_name}"})
+
+

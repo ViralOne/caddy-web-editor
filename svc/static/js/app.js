@@ -1,4 +1,4 @@
-const { basicSetup, EditorView, EditorState, keymap, oneDark, StreamLanguage } = window.CM;
+const { basicSetup, EditorView, EditorState, keymap, oneDark, StreamLanguage, indentWithTab } = window.CM;
 
 const caddyfileLanguage = StreamLanguage.define({
   token(stream) {
@@ -38,7 +38,10 @@ function initEditor(content) {
             document.getElementById('cursor-pos').textContent = `Ln ${line.number}, Col ${pos - line.from + 1}`;
           }
         }),
-        keymap.of([{ key: 'Mod-s', run: () => { doSave(); return true; } }]),
+        keymap.of([
+          { key: 'Mod-s', run: () => { doSave(); return true; } },
+          indentWithTab,
+        ]),
         EditorView.theme({
           '&': { height: '100%' },
           '.cm-scroller': { overflow: 'auto' },
@@ -210,10 +213,17 @@ async function loadBackups() {
   const list = document.getElementById('backups-list'); list.textContent = '';
   if (!data.backups.length) { list.textContent = 'No backups yet.'; return; }
   data.backups.forEach(b => {
-    const card = document.createElement('div'); card.className = 'snippet-card'; card.onclick = () => previewBackup(b);
+    const card = document.createElement('div'); card.className = 'snippet-card';
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;width:100%';
+    const left = document.createElement('div'); left.style.cursor = 'pointer'; left.style.flex = '1'; left.onclick = () => previewBackup(b);
     const name = document.createElement('div'); name.className = 'name'; name.textContent = b.replace('Caddyfile.','');
     const desc = document.createElement('div'); desc.className = 'desc'; desc.textContent = 'Click to preview';
-    card.appendChild(name); card.appendChild(desc); list.appendChild(card);
+    left.appendChild(name); left.appendChild(desc);
+    const delBtn = document.createElement('button'); delBtn.className = 'btn btn-danger'; delBtn.textContent = 'Delete';
+    delBtn.style.cssText = 'padding:3px 8px;font-size:10px;margin-left:8px';
+    delBtn.onclick = async (e) => { e.stopPropagation(); if (!confirm(`Delete backup ${b.replace('Caddyfile.','')}?`)) return; const r = await fetch(`/api/backups/${b}`, {method:'DELETE'}); if (r.ok) loadBackups(); };
+    row.appendChild(left); row.appendChild(delBtn); card.appendChild(row);
+    list.appendChild(card);
   });
 }
 async function previewBackup(name) {
@@ -234,14 +244,32 @@ window.restoreFromPreview = function() { setContent(previewBackupContent); setSt
 
 function renderDiff(current, backup) {
   const container = document.getElementById('diff-content'); container.textContent = '';
-  const cl = current.split('\n'), bl = backup.split('\n'), max = Math.max(cl.length, bl.length);
-  for (let i = 0; i < max; i++) {
-    const cur = cl[i], bak = bl[i], ln = String(i+1).padStart(3,' ');
-    if (cur === undefined) { const d = document.createElement('div'); d.style.cssText='color:#66bb6a;background:#1b3d1b'; d.textContent=`+${ln} ${bak}`; container.appendChild(d); }
-    else if (bak === undefined) { const d = document.createElement('div'); d.style.cssText='color:#ef5350;background:#3d1b1b'; d.textContent=`-${ln} ${cur}`; container.appendChild(d); }
-    else if (cur !== bak) { const r = document.createElement('div'); r.style.cssText='color:#ef5350;background:#3d1b1b'; r.textContent=`-${ln} ${cur}`; container.appendChild(r); const a = document.createElement('div'); a.style.cssText='color:#66bb6a;background:#1b3d1b'; a.textContent=`+${ln} ${bak}`; container.appendChild(a); }
-    else { const d = document.createElement('div'); d.style.cssText='color:#555'; d.textContent=` ${ln} ${cur}`; container.appendChild(d); }
+  const a = current.split('\n'), b = backup.split('\n');
+  const ops = diffLines(a, b);
+  let aLn = 1, bLn = 1;
+  ops.forEach(op => {
+    const d = document.createElement('div');
+    if (op.type === 'equal') { d.style.cssText = 'color:#555'; d.textContent = ` ${String(aLn).padStart(3)} ${op.line}`; aLn++; bLn++; }
+    else if (op.type === 'delete') { d.style.cssText = 'color:#ef5350;background:#3d1b1b'; d.textContent = `-${String(aLn).padStart(3)} ${op.line}`; aLn++; }
+    else { d.style.cssText = 'color:#66bb6a;background:#1b3d1b'; d.textContent = `+${String(bLn).padStart(3)} ${op.line}`; bLn++; }
+    container.appendChild(d);
+  });
+}
+
+function diffLines(a, b) {
+  const n = a.length, m = b.length;
+  const dp = Array.from({length: n + 1}, () => new Array(m + 1).fill(0));
+  for (let i = 1; i <= n; i++)
+    for (let j = 1; j <= m; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  const ops = [];
+  let i = n, j = m;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && a[i-1] === b[j-1]) { ops.unshift({type:'equal', line: a[i-1]}); i--; j--; }
+    else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { ops.unshift({type:'insert', line: b[j-1]}); j--; }
+    else { ops.unshift({type:'delete', line: a[i-1]}); i--; }
   }
+  return ops;
 }
 
 async function loadAudit() {
