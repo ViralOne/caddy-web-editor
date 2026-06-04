@@ -106,7 +106,7 @@ window.doSave = async function() {
   const valRes = await fetch('/api/validate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content}) });
   const valData = await valRes.json();
   if (!valData.valid) { setStatus(valData.message, 'err'); setDot('red'); alert('Cannot save: config is invalid.\n\n' + valData.message); return; }
-  if (valData.warnings && valData.warnings.length) { showWarnings(valData.warnings); setDot('red'); setStatus('Fix warnings before saving', 'err'); alert('Cannot save: fix warnings first.\n\n' + valData.warnings.join('\n')); return; }
+  if (valData.warnings && valData.warnings.length) { showWarnings(valData.warnings); setDot('yellow'); setStatus('Warnings found (review before saving)', 'warn'); if (!confirm('Warnings found:\n\n' + valData.warnings.join('\n') + '\n\nSave anyway?')) return; }
   if (!confirm('Config is valid. Save and reload Caddy?')) return;
   setStatus('Saving...', 'info');
   const res = await fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content}) });

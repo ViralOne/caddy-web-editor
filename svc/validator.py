@@ -45,7 +45,6 @@ def caddy_validate(content: str) -> tuple[bool, str]:
 def smart_validate(content: str) -> list[str]:
     """Check site addresses look like real domains (caddy is too permissive)."""
     warnings = []
-    in_global = False
     brace_depth = 0
 
     for i, line in enumerate(content.split("\n"), 1):
@@ -53,15 +52,11 @@ def smart_validate(content: str) -> list[str]:
         if not stripped or stripped.startswith("#"):
             continue
 
-        if stripped == "{" and brace_depth == 0:
-            in_global = True
-            brace_depth += 1
-            continue
+        opens = stripped.count("{")
+        closes = stripped.count("}")
 
-        if in_global:
-            brace_depth += stripped.count("{") - stripped.count("}")
-            if brace_depth <= 0:
-                in_global = False
+        if brace_depth == 0 and stripped == "{":
+            brace_depth += 1
             continue
 
         if brace_depth == 0 and not stripped.startswith("}") and not stripped.startswith("import "):
@@ -69,5 +64,9 @@ def smart_validate(content: str) -> list[str]:
             if addr and not DOMAIN_RE.match(addr) and not addr.startswith(":") and not addr.startswith("http"):
                 if not addr.startswith("*.") and "." not in addr:
                     warnings.append(f"Line {i}: '{addr}' doesn't look like a valid domain")
+
+        brace_depth += opens - closes
+        if brace_depth < 0:
+            brace_depth = 0
 
     return warnings
