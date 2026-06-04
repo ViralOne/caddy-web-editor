@@ -11,5 +11,6 @@ ALLOWED_EMAILS = [
 ]
 SESSION_TIMEOUT_HOURS = int(os.environ.get("SESSION_TIMEOUT_HOURS", "8"))
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:9090")
+AUTH_MODE = os.environ.get("AUTH_MODE", "google").lower()
 
 os.makedirs(BACKUP_DIR, exist_ok=True)

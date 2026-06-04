@@ -6,18 +6,19 @@ from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, jsonify, redirect, render_template, request, session
 
 from .audit import log_action
-from .config import ALLOWED_DOMAIN, ALLOWED_EMAILS, SERVER_URL, SESSION_TIMEOUT_HOURS
+from .config import ALLOWED_DOMAIN, ALLOWED_EMAILS, AUTH_MODE, SERVER_URL, SESSION_TIMEOUT_HOURS
 
 auth_bp = Blueprint("auth", __name__)
 
 oauth = OAuth()
-oauth.register(
-    name="google",
-    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={"scope": "openid email profile"},
-)
+if AUTH_MODE == "google":
+    oauth.register(
+        name="google",
+        client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+        client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
 
 
 def is_allowed(email: str) -> bool:
@@ -33,6 +34,17 @@ def is_allowed(email: str) -> bool:
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        if AUTH_MODE == "cloudflare":
+            email = request.headers.get("Cf-Access-Authenticated-User-Email", "")
+            if not email:
+                if request.path.startswith("/api/"):
+                    return jsonify({"error": "unauthorized"}), 401
+                return "Access denied. Not authenticated via Cloudflare Access.", 403
+            if not is_allowed(email):
+                return jsonify({"error": f"access denied for {email}"}), 403
+            session["user"] = {"email": email, "name": email}
+            return f(*args, **kwargs)
+
         if not session.get("user"):
             if request.path.startswith("/api/"):
                 return jsonify({"error": "unauthorized"}), 401
@@ -49,17 +61,23 @@ def login_required(f):
 
 @auth_bp.route("/welcome")
 def welcome():
+    if AUTH_MODE == "cloudflare":
+        return redirect("/")
     return render_template("welcome.html")
 
 
 @auth_bp.route("/login")
 def login():
+    if AUTH_MODE == "cloudflare":
+        return redirect("/")
     redirect_uri = f"{SERVER_URL}/auth/callback"
     return oauth.google.authorize_redirect(redirect_uri)
 
 
 @auth_bp.route("/auth/callback")
 def callback():
+    if AUTH_MODE == "cloudflare":
+        return redirect("/")
     try:
         token = oauth.google.authorize_access_token()
     except Exception:
@@ -86,4 +104,6 @@ def logout():
     if user:
         log_action("logout", user)
     session.clear()
-    return redirect("/")
+    if AUTH_MODE == "cloudflare":
+        return redirect("/")
+    return redirect("/welcome")

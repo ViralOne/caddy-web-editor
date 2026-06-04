@@ -4,6 +4,7 @@ import os
 from flask import Flask
 
 from .auth import auth_bp, oauth
+from .config import AUTH_MODE
 from .routes.editor import editor_bp
 from .routes.ops import ops_bp
 from .routes.sites import sites_bp
@@ -22,7 +23,8 @@ def create_app():
         hours=int(os.environ.get("SESSION_TIMEOUT_HOURS", "8"))
     )
 
-    oauth.init_app(app)
+    if AUTH_MODE == "google":
+        oauth.init_app(app)
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(editor_bp)

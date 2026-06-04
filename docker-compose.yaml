@@ -15,5 +15,16 @@ services:
       timeout: 5s
       retries: 3
 
+  # Optional: Cloudflare Tunnel (set AUTH_MODE=cloudflare and CLOUDFLARE_TUNNEL_TOKEN in .env)
+  cloudflared-caddy:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      caddy-editor:
+        condition: service_healthy
+    profiles:
+      - cloudflare
+
 volumes:
   caddy-backups:
