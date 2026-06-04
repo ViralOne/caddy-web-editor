@@ -12,10 +12,12 @@
   <h1>Caddy Editor</h1>
   <button class="btn btn-validate" onclick="doValidate()">Validate</button>
   <button class="btn btn-save" onclick="doSave()">Save & Reload</button>
-  <button class="btn btn-secondary" onclick="togglePanel('snippets')">Snippets</button>
-  <button class="btn btn-secondary" onclick="togglePanel('backups')">Backups</button>
-  <button class="btn btn-secondary" onclick="togglePanel('audit')">Audit</button>
-  <button class="btn btn-secondary" onclick="togglePanel('status')">Status</button>
+  <div class="btn-group">
+    <button class="btn btn-secondary" id="panel-btn-snippets" onclick="togglePanel('snippets')">Snippets</button>
+    <button class="btn btn-secondary" id="panel-btn-backups" onclick="togglePanel('backups')">Backups</button>
+    <button class="btn btn-secondary" id="panel-btn-audit" onclick="togglePanel('audit')">Audit</button>
+    <button class="btn btn-secondary" id="panel-btn-status" onclick="togglePanel('status')">Status</button>
+  </div>
   <span class="spacer"></span>
   <span class="user-info" id="user-info"></span>
   <a href="/logout"><button class="btn btn-logout">logout</button></a>
@@ -75,9 +77,9 @@
         <button class="btn btn-secondary" onclick="closePreview()" style="padding:4px 10px">&larr; Back</button>
         <span id="preview-name" style="font-size:12px;color:#4fc3f7;font-weight:600"></span>
       </div>
-      <div style="display:flex;gap:6px;margin-bottom:10px">
-        <button class="btn btn-tab active" onclick="showPreviewTab('preview')">Preview</button>
-        <button class="btn btn-tab" onclick="showPreviewTab('diff')">Diff</button>
+      <div style="display:flex;gap:4px;margin-bottom:10px">
+        <button class="btn btn-tab" id="tab-btn-preview" onclick="showPreviewTab('preview')">Preview</button>
+        <button class="btn btn-tab active" id="tab-btn-diff" onclick="showPreviewTab('diff')">Diff</button>
       </div>
       <div id="preview-content" style="background:#0d1117;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;line-height:1.5;max-height:calc(100vh - 220px);overflow:auto;white-space:pre-wrap;color:#c9d1d9"></div>
       <div id="diff-content" style="display:none;background:#0d1117;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;line-height:1.5;max-height:calc(100vh - 220px);overflow:auto;white-space:pre-wrap"></div>

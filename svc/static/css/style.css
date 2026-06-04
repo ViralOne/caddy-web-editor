@@ -12,15 +12,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .btn-validate:hover { background: #1565c0; }
 .btn-save { background: #43a047; color: white; }
 .btn-save:hover { background: #2e7d32; }
-.btn-tab { background: #263238; color: #90a4ae; border: 1px solid #37474f; }
+.btn-tab { background: #263238; color: #6b7c88; border: 1px solid #37474f; }
 .btn-tab:hover { background: #37474f; color: white; }
-.btn-tab.active { background: #1e88e5; color: white; border-color: #1e88e5; }
-.btn-secondary { background: #37474f; color: #cfd8dc; }
-.btn-secondary:hover { background: #455a64; }
+.btn-tab.active { background: #4fc3f7; color: #0d1117; border-color: #4fc3f7; font-weight: 600; }
+.btn-secondary { background: #263238; color: #90a4ae; border: 1px solid #37474f; }
+.btn-secondary:hover { background: #37474f; color: white; border-color: #546e7a; }
+.btn-secondary.panel-active { background: #1a3a4a; color: #4fc3f7; border-color: #4fc3f7; }
 .btn-danger { background: #c62828; color: white; font-size: 10px; padding: 4px 8px; }
 .btn-danger:hover { background: #b71c1c; }
-.btn-logout { background: none; border: none; color: #666; font-size: 11px; cursor: pointer; }
+.btn-logout { background: none; border: none; color: #546e7a; font-size: 11px; cursor: pointer; }
 .btn-logout:hover { color: #eee; }
+.btn-group { display: inline-flex; gap: 4px; padding-left: 12px; margin-left: 4px; border-left: 1px solid #0f3460; }
 
 /* Tabs */
 .tabs { padding: 0 16px; background: #16213e; display: flex; gap: 4px; border-bottom: 1px solid #0f3460; }

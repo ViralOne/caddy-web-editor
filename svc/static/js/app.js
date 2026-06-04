@@ -188,9 +188,18 @@ window.addSite = function() {
 window.togglePanel = function(name) {
   const panel = document.getElementById(`panel-${name}`); const isOpen = panel.classList.contains('open');
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('open'));
-  if (!isOpen) { panel.classList.add('open'); if (name==='backups') loadBackups(); if (name==='audit') loadAudit(); if (name==='status') loadStatusPanel(); if (name==='snippets') loadSnippets(); }
+  document.querySelectorAll('[id^="panel-btn-"]').forEach(b => b.classList.remove('panel-active'));
+  if (!isOpen) {
+    panel.classList.add('open');
+    const btn = document.getElementById(`panel-btn-${name}`);
+    if (btn) btn.classList.add('panel-active');
+    if (name==='backups') loadBackups(); if (name==='audit') loadAudit(); if (name==='status') loadStatusPanel(); if (name==='snippets') loadSnippets();
+  }
 };
-window.closePanel = function(name) { document.getElementById(`panel-${name}`).classList.remove('open'); };
+window.closePanel = function(name) {
+  document.getElementById(`panel-${name}`).classList.remove('open');
+  document.querySelectorAll('[id^="panel-btn-"]').forEach(b => b.classList.remove('panel-active'));
+};
 
 let previewBackupContent = '';
 async function loadBackups() {
@@ -212,7 +221,12 @@ async function previewBackup(name) {
   document.getElementById('preview-content').textContent = data.content;
   renderDiff(getContent(), data.content); window.showPreviewTab('diff');
 }
-window.showPreviewTab = function(tab) { document.getElementById('preview-content').style.display = tab==='preview'?'block':'none'; document.getElementById('diff-content').style.display = tab==='diff'?'block':'none'; };
+window.showPreviewTab = function(tab) {
+  document.getElementById('preview-content').style.display = tab==='preview'?'block':'none';
+  document.getElementById('diff-content').style.display = tab==='diff'?'block':'none';
+  document.getElementById('tab-btn-preview').classList.toggle('active', tab==='preview');
+  document.getElementById('tab-btn-diff').classList.toggle('active', tab==='diff');
+};
 window.closePreview = function() { document.getElementById('backup-preview').style.display = 'none'; document.getElementById('backups-list').style.display = 'block'; };
 window.restoreFromPreview = function() { setContent(previewBackupContent); setStatus('Backup loaded (unsaved)', 'info'); setDot('yellow'); window.closePanel('backups'); };
 
@@ -271,6 +285,6 @@ window.searchNext = function() { const q = document.getElementById('search-input
 function setStatus(msg, cls) { const el = document.getElementById('status-msg'); el.textContent = msg; el.className = 'status-msg ' + (cls||''); }
 function setDot(c) { document.getElementById('status-dot').className = 'status-dot ' + c; }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.panel').forEach(p=>p.classList.remove('open')); document.getElementById('search-bar').classList.remove('open'); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.panel').forEach(p=>p.classList.remove('open')); document.querySelectorAll('[id^="panel-btn-"]').forEach(b=>b.classList.remove('panel-active')); document.getElementById('search-bar').classList.remove('open'); } });
 
 init();
