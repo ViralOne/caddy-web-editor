@@ -3,11 +3,12 @@ import shutil
 import subprocess
 from datetime import datetime
 
+import requests as http_client
 from flask import Blueprint, jsonify, render_template, request, session
 
 from ..audit import log_action
 from ..auth import login_required
-from ..config import BACKUP_DIR, CADDYFILE
+from ..config import BACKUP_DIR, CADDY_API_URL, CADDYFILE
 from ..validator import caddy_fmt, caddy_validate, smart_validate
 
 
@@ -86,21 +87,21 @@ def save():
     with open(CADDYFILE, "w") as f:
         f.write(content)
 
-    reload_result = subprocess.run(
-        ["caddy", "reload", "--config", CADDYFILE, "--adapter", "caddyfile"],
-        capture_output=True, text=True,
-    )
-
-    if reload_result.returncode == 0:
-        log_action("save_reload", user, f"backup={backup_name}")
-        return jsonify({"ok": True, "message": f"Saved and reloaded by {user}", "content": content})
-
-    if "connection refused" in reload_result.stderr:
-        log_action("save_no_reload", user, f"backup={backup_name}, caddy not running")
-        return jsonify({"ok": True, "message": f"Saved by {user} (Caddy not running — reload skipped)", "content": content})
-
-    log_action("reload_failed", user, reload_result.stderr[:200])
-    return jsonify({"ok": False, "message": f"Saved but reload failed: {reload_result.stderr}"}), 500
+    try:
+        resp = http_client.post(
+            f"{CADDY_API_URL}/load",
+            data=content,
+            headers={"Content-Type": "text/caddyfile"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            log_action("save_reload", user, f"backup={backup_name}")
+            return jsonify({"ok": True, "message": f"Saved and reloaded by {user}", "content": content})
+        log_action("reload_failed", user, resp.text[:200])
+        return jsonify({"ok": False, "message": f"Saved but reload failed: {resp.text}"}), 500
+    except http_client.ConnectionError:
+        log_action("save_no_reload", user, f"backup={backup_name}, caddy not reachable")
+        return jsonify({"ok": True, "message": f"Saved by {user} (Caddy not reachable — reload skipped)", "content": content})
 
 
 @editor_bp.route("/api/backups", methods=["GET"])
