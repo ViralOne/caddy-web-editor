@@ -1,53 +1,30 @@
 services:
-  caddy:
-    image: caddy:2.11.3-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - caddy-config:/etc/caddy
-      - caddy-data:/data
-    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2019/config/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    networks:
-      - caddy-net
-
   caddy-editor:
-    build: .
+    image: ghcr.io/viralone/caddy-web-editor:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9090:9090"
+      - "9090:9090"
     env_file:
       - .env
     volumes:
-      - caddy-config:/etc/caddy
+      - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy-backups:/backups
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:9090/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-    networks:
-      - caddy-net
 
-  cloudflared:
+  # Optional: Cloudflare Tunnel (start with: docker compose -f docker-compose.prod.yml --profile cloudflare up -d)
+  cloudflared-caddy:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
-    networks:
-      - caddy-net
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      caddy-editor:
+        condition: service_healthy
+    profiles:
+      - cloudflare
 
 volumes:
-  caddy-config:
-  caddy-data:
   caddy-backups:
-
-networks:
-  caddy-net:
