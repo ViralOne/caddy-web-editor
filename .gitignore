@@ -10,3 +10,4 @@ build/
 test-Caddyfile
 node_modules/
 package-lock.json
+Caddyfile
