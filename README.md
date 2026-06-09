@@ -85,22 +85,30 @@ Shows request counts, latency, error rates, and bandwidth per server group.
 
 ### Logs Tab
 
-Add a global `log` directive to write all access logs to the shared volume:
+Access logs require a `log` directive **inside each site block**. Define a snippet once and import it in every site:
 
 ```caddyfile
-{
-    admin 0.0.0.0:2019
-    metrics
-    log default {
-        output file /var/log/caddy/access.log
+(access_log) {
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 3
+        }
         format json
     }
 }
+
+app.yourdomain.com {
+    import access_log
+    reverse_proxy 10.0.0.1:8080
+}
 ```
 
-The `caddy-logs` volume is shared between the Caddy and editor containers (already configured in both compose files). The global `log default` block logs all traffic across all site blocks to one file — no per-site `log` blocks needed.
+The `caddy-logs` volume is shared between the Caddy and editor containers (already configured in both compose files). Every site that imports `access_log` will write HTTP request entries to the shared file.
 
 To change the log path, set `CADDY_LOG_FILE` in `.env` (default: `/var/log/caddy/access.log`).
+
+**Note:** A global `log default` block only captures Caddy runtime logs (startup, TLS, shutdown) — not HTTP access logs. You must use per-site `log` directives for access logging.
 
 ## Upstream Health Checks
 

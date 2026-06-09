@@ -11,7 +11,7 @@ async function pollLogs() {
         body.textContent = '';
         const hint = el('div', 'metrics-hint');
         hint.style.whiteSpace = 'pre-wrap';
-        hint.textContent = `No log file at ${data.path}.\n\nAdd a global log directive to your Caddyfile:\n\n{\n    log default {\n        output file ${data.path}\n        format json\n    }\n}\n\nThe caddy-logs volume is already shared between containers. Logs appear after the first request hits Caddy.`;
+        hint.textContent = `No log file at ${data.path}.\n\nAdd a log snippet and import it in each site block:\n\n(access_log) {\n    log {\n        output file ${data.path}\n        format json\n    }\n}\n\nyourdomain.com {\n    import access_log\n    reverse_proxy ...\n}\n\nLogs appear after the first HTTP request hits a site with the import.`;
         body.appendChild(hint);
       }
       logsPos = null;

@@ -255,10 +255,31 @@ def get_logs():
 @editor_bp.route("/api/logs/ping", methods=["POST"])
 @login_required
 def ping_caddy():
-    """Hit Caddy's HTTP port to generate an access log entry for testing."""
-    caddy_host = CADDY_API_URL.replace(":2019", ":80")
+    """Hit Caddy's HTTP port to generate an access log entry for testing.
+
+    Sends a request with a matching Host header so it routes through a site
+    block that has the access_log import (generating a real log entry).
+    """
+    from urllib.parse import urlparse
+    parsed = urlparse(CADDY_API_URL)
+    caddy_http = f"http://{parsed.hostname}:80"
     try:
-        http_client.get(caddy_host, timeout=3, allow_redirects=False)
+        resp = http_client.get(f"{CADDY_API_URL}/config/apps/http/servers", timeout=3)
+        if resp.status_code == 200:
+            servers = resp.json()
+            for srv in servers.values():
+                for route in srv.get("routes", []):
+                    for match in route.get("match", []):
+                        hosts = match.get("host", [])
+                        if hosts:
+                            http_client.get(caddy_http, timeout=3,
+                                            allow_redirects=False,
+                                            headers={"Host": hosts[0]})
+                            return jsonify({"ok": True})
+    except Exception:
+        pass
+    try:
+        http_client.get(caddy_http, timeout=3, allow_redirects=False)
     except Exception:
         pass
     return jsonify({"ok": True})
