@@ -1,4 +1,6 @@
+import hmac
 import os
+import secrets
 from datetime import datetime
 from functools import wraps
 
@@ -9,6 +11,23 @@ from .audit import log_action
 from .config import ALLOWED_DOMAIN, ALLOWED_EMAILS, AUTH_MODE, SERVER_URL, SESSION_TIMEOUT_HOURS
 
 auth_bp = Blueprint("auth", __name__)
+
+
+def get_or_create_csrf() -> str:
+    """Return the session CSRF token, creating one if absent."""
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def csrf_valid() -> bool:
+    """Constant-time compare of the X-CSRF-Token header against the session token."""
+    sent = request.headers.get("X-CSRF-Token", "")
+    expected = session.get("csrf_token", "")
+    return bool(expected) and hmac.compare_digest(sent, expected)
+
 
 oauth = OAuth()
 if AUTH_MODE == "google":

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token }}">
 <title>Caddy Editor</title>
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -10,13 +11,15 @@
 
 <div class="header">
   <h1>Caddy Editor</h1>
-  <button class="btn btn-validate" onclick="doValidate()">Validate</button>
-  <button class="btn btn-save" onclick="doSave()">Save & Reload</button>
+  <button class="btn btn-validate" data-act="validate">Validate</button>
+  <button class="btn btn-save" data-act="save">Save &amp; Reload</button>
   <div class="btn-group">
-    <button class="btn btn-secondary" id="panel-btn-snippets" onclick="togglePanel('snippets')">Snippets</button>
-    <button class="btn btn-secondary" id="panel-btn-backups" onclick="togglePanel('backups')">Backups</button>
-    <button class="btn btn-secondary" id="panel-btn-audit" onclick="togglePanel('audit')">Audit</button>
-    <button class="btn btn-secondary" id="panel-btn-status" onclick="togglePanel('status')">Status</button>
+    <button class="btn btn-secondary" data-act="find">Find</button>
+    <button class="btn btn-secondary" id="panel-btn-snippets" data-panel="snippets">Snippets</button>
+    <button class="btn btn-secondary" id="panel-btn-backups" data-panel="backups">Backups</button>
+    <button class="btn btn-secondary" id="panel-btn-audit" data-panel="audit">Audit</button>
+    <button class="btn btn-secondary" id="panel-btn-logs" data-panel="logs">Logs</button>
+    <button class="btn btn-secondary" id="panel-btn-status" data-panel="status">Status</button>
   </div>
   <span class="spacer"></span>
   <span class="user-info" id="user-info"></span>
@@ -24,8 +27,8 @@
 </div>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('editor')">Editor</div>
-  <div class="tab" onclick="switchTab('metrics')">Metrics</div>
+  <div class="tab active" data-tab="editor">Editor</div>
+  <div class="tab" data-tab="metrics">Metrics</div>
 </div>
 
 <div class="warnings" id="warnings"></div>
@@ -33,9 +36,13 @@
 <div class="main">
   <div class="tab-content active" id="tab-editor">
     <div class="search-bar" id="search-bar">
-      <input type="text" id="search-input" placeholder="Find... (Esc to close)" oninput="doSearch()">
+      <input type="text" id="search-input" placeholder="Find... (Esc to close)">
+      <button class="btn btn-secondary" data-act="search-next" style="padding:3px 8px;font-size:10px">Next</button>
       <span style="color:#666;font-size:11px" id="match-count"></span>
-      <button class="btn btn-secondary" onclick="searchNext()" style="padding:3px 8px;font-size:10px">Next</button>
+      <input type="text" id="replace-input" placeholder="Replace with...">
+      <button class="btn btn-secondary" data-act="replace-one" style="padding:3px 8px;font-size:10px">Replace</button>
+      <button class="btn btn-secondary" data-act="replace-all" style="padding:3px 8px;font-size:10px">Replace All</button>
+      <button class="btn btn-secondary" data-act="search-close" style="padding:3px 8px;font-size:10px">&times;</button>
     </div>
     <div class="editor-wrap" id="cm-editor" style="flex:1"></div>
   </div>
@@ -57,29 +64,30 @@
 
 <!-- Snippets Panel -->
 <div class="panel" id="panel-snippets">
-  <div class="panel-header"><h3>Snippets & Templates</h3><button class="panel-close" onclick="closePanel('snippets')">&times;</button></div>
+  <div class="panel-header"><h3>Snippets &amp; Templates</h3><button class="panel-close" data-close="snippets">&times;</button></div>
   <div class="panel-body" id="snippets-list"></div>
 </div>
 
 <!-- Backups Panel -->
 <div class="panel" id="panel-backups">
-  <div class="panel-header"><h3>Backups</h3><button class="panel-close" onclick="closePanel('backups')">&times;</button></div>
+  <div class="panel-header"><h3>Backups</h3><button class="panel-close" data-close="backups">&times;</button></div>
   <div class="panel-body">
     <div id="backups-list"></div>
     <div id="backup-preview" style="display:none">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <button class="btn btn-secondary" onclick="closePreview()" style="padding:4px 10px">&larr; Back</button>
+        <button class="btn btn-secondary" data-act="close-preview" style="padding:4px 10px">&larr; Back</button>
         <span id="preview-name" style="font-size:12px;color:#4fc3f7;font-weight:600"></span>
       </div>
       <div style="display:flex;gap:4px;margin-bottom:10px">
-        <button class="btn btn-tab" id="tab-btn-preview" onclick="showPreviewTab('preview')">Preview</button>
-        <button class="btn btn-tab active" id="tab-btn-diff" onclick="showPreviewTab('diff')">Diff</button>
+        <button class="btn btn-tab" id="tab-btn-preview" data-ptab="preview">Preview</button>
+        <button class="btn btn-tab active" id="tab-btn-diff" data-ptab="diff">Diff</button>
       </div>
       <div id="preview-content" style="background:#0d1117;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;line-height:1.5;max-height:calc(100vh - 220px);overflow:auto;white-space:pre-wrap;color:#c9d1d9"></div>
       <div id="diff-content" style="display:none;background:#0d1117;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;line-height:1.5;max-height:calc(100vh - 220px);overflow:auto;white-space:pre-wrap"></div>
       <div style="margin-top:10px;display:flex;gap:8px">
-        <button class="btn btn-save" onclick="restoreFromPreview()">Restore to Editor</button>
-        <button class="btn btn-secondary" onclick="closePreview()">Cancel</button>
+        <button class="btn btn-save" data-act="rollback-preview">Rollback (restore + reload)</button>
+        <button class="btn btn-secondary" data-act="restore-preview">Load to Editor</button>
+        <button class="btn btn-secondary" data-act="close-preview">Cancel</button>
       </div>
     </div>
   </div>
@@ -87,17 +95,50 @@
 
 <!-- Audit Panel -->
 <div class="panel" id="panel-audit">
-  <div class="panel-header"><h3>Audit Log</h3><button class="panel-close" onclick="closePanel('audit')">&times;</button></div>
+  <div class="panel-header"><h3>Audit Log</h3><button class="panel-close" data-close="audit">&times;</button></div>
   <div class="panel-body" id="audit-list"></div>
+</div>
+
+<!-- Logs Panel -->
+<div class="panel" id="panel-logs">
+  <div class="panel-header"><h3>Caddy Logs</h3><button class="panel-close" data-close="logs">&times;</button></div>
+  <div class="panel-body logs-body" id="logs-body"></div>
 </div>
 
 <!-- Status Panel -->
 <div class="panel" id="panel-status">
-  <div class="panel-header"><h3>Caddy Status</h3><button class="panel-close" onclick="closePanel('status')">&times;</button></div>
+  <div class="panel-header"><h3>Caddy Status</h3><button class="panel-close" data-close="status">&times;</button></div>
   <div class="panel-body" id="status-body"></div>
 </div>
 
+<!-- Save Diff Modal -->
+<div class="modal-overlay" id="save-diff-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Review changes before saving</h3>
+      <span class="modal-sub">Comparing your editor (new) against the live config on disk (current)</span>
+    </div>
+    <div class="modal-body" id="save-diff-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-save" data-act="confirm-save">Save &amp; Reload</button>
+      <button class="btn btn-secondary" data-act="cancel-save">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/editor.bundle.js"></script>
-<script src="/static/js/app.js"></script>
+<!-- App scripts: load order matters (classic scripts share one global scope;
+     csrf first, core before features, events last because it calls init()). -->
+<script src="/static/js/app/csrf.js"></script>
+<script src="/static/js/app/core.js"></script>
+<script src="/static/js/app/diff.js"></script>
+<script src="/static/js/app/caddyfile.js"></script>
+<script src="/static/js/app/validate.js"></script>
+<script src="/static/js/app/metrics.js"></script>
+<script src="/static/js/app/panels.js"></script>
+<script src="/static/js/app/backups.js"></script>
+<script src="/static/js/app/logs.js"></script>
+<script src="/static/js/app/search.js"></script>
+<script src="/static/js/app/events.js"></script>
 </body>
 </html>

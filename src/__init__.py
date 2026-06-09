@@ -2,9 +2,9 @@ from datetime import timedelta
 import os
 import secrets
 
-from flask import Flask
+from flask import Flask, jsonify, request
 
-from .auth import auth_bp, oauth
+from .auth import auth_bp, csrf_valid, oauth
 from .config import AUTH_MODE
 from .routes.editor import editor_bp
 from .routes.ops import ops_bp
@@ -49,6 +49,12 @@ def create_app():
     app.register_blueprint(editor_bp)
     app.register_blueprint(ops_bp)
 
+    @app.before_request
+    def csrf_protect():
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.path.startswith("/api/"):
+            if not csrf_valid():
+                return jsonify({"error": "csrf token missing or invalid"}), 403
+
     @app.after_request
     def security_headers(response):
         response.headers["Server"] = "Microsoft-IIS/10.0"
@@ -57,6 +63,17 @@ def create_app():
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'none'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'"
+        )
         return response
 
     return app

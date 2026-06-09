@@ -13,5 +13,6 @@ SESSION_TIMEOUT_HOURS = int(os.environ.get("SESSION_TIMEOUT_HOURS", "8"))
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:9090")
 AUTH_MODE = os.environ.get("AUTH_MODE", "google").lower()
 CADDY_API_URL = os.environ.get("CADDY_API_URL", "http://caddy:2019")
+CADDY_LOG_FILE = os.environ.get("CADDY_LOG_FILE", "/var/log/caddy/access.log")
 
 os.makedirs(BACKUP_DIR, exist_ok=True)
