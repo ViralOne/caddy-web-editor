@@ -2,9 +2,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import os
+
 from src import create_app
 
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=9090, debug=True)
+    # Local dev with FLASK_DEBUG=1.
+    debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    app.run(host="0.0.0.0", port=9090, debug=debug)

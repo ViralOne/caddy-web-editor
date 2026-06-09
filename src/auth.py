@@ -22,11 +22,11 @@ if AUTH_MODE == "google":
 
 
 def is_allowed(email: str) -> bool:
+    if not email:
+        return False
     if ALLOWED_EMAILS and email in ALLOWED_EMAILS:
         return True
     if ALLOWED_DOMAIN and email.endswith(f"@{ALLOWED_DOMAIN}"):
-        return True
-    if not ALLOWED_DOMAIN and not ALLOWED_EMAILS:
         return True
     return False
 
@@ -105,5 +105,5 @@ def logout():
         log_action("logout", user)
     session.clear()
     if AUTH_MODE == "cloudflare":
-        return redirect("/")
+        return redirect("/cdn-cgi/access/logout")
     return redirect("/welcome")
