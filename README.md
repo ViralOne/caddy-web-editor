@@ -4,11 +4,10 @@ Web UI to manage your Caddyfile — edit, validate, format, save & reload with z
 
 ## Features
 
-- **Code Editor** — CodeMirror 6 with Caddyfile syntax highlighting, find/replace, Cmd+S to save
-- **Validate & Format** — runs `caddy validate` and `caddy fmt` before every save
+- **Editor Tab** — CodeMirror 6 with Caddyfile syntax highlighting, find/replace, Cmd+S to save, validate & format
+- **Metrics Tab** — total requests, error rate, in-flight, bandwidth, upstream health (requires `metrics` in global block)
+- **Logs Tab** — live-tailing Caddy access logs (requires global `log default` writing to shared volume)
 - **Save & Reload** — writes Caddyfile and reloads Caddy via admin API (zero downtime)
-- **Traffic Metrics** — total requests, error rate, in-flight connections, bandwidth (from Prometheus)
-- **Upstream Health** — live view of backend active requests, fail counts, health status
 - **Backups** — automatic pre-save backups with preview, inline diff, and one-click restore
 - **Audit Log** — who saved what and when
 - **Snippets** — common Caddyfile patterns (reverse proxy, headers, rate limiting, etc.)
@@ -67,9 +66,13 @@ docker compose -f docker-compose.prod.yaml up -d
 - The global block must include `admin 0.0.0.0:2019` so the editor can reload Caddy over the Docker network
 - Add `metrics` to the global block to enable traffic metrics in the Metrics tab
 
-## Enabling Metrics
+## Feature Requirements
 
-Add to your Caddyfile global block and save:
+Each tab beyond the Editor requires specific Caddyfile configuration:
+
+### Metrics Tab
+
+Add `metrics` to your Caddyfile global block:
 
 ```caddyfile
 {
@@ -78,7 +81,26 @@ Add to your Caddyfile global block and save:
 }
 ```
 
-The Metrics tab will then show request counts, latency, error rates, and bandwidth per server group.
+Shows request counts, latency, error rates, and bandwidth per server group.
+
+### Logs Tab
+
+Add a global `log` directive to write all access logs to the shared volume:
+
+```caddyfile
+{
+    admin 0.0.0.0:2019
+    metrics
+    log default {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}
+```
+
+The `caddy-logs` volume is shared between the Caddy and editor containers (already configured in both compose files). The global `log default` block logs all traffic across all site blocks to one file — no per-site `log` blocks needed.
+
+To change the log path, set `CADDY_LOG_FILE` in `.env` (default: `/var/log/caddy/access.log`).
 
 ## Upstream Health Checks
 

@@ -1,18 +1,16 @@
 // Side panels: open/close behaviour + Audit, Status, and Snippets loaders.
 window.togglePanel = function(name) {
   const panel = document.getElementById(`panel-${name}`); const isOpen = panel.classList.contains('open');
-  stopLogs();
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('open'));
   document.querySelectorAll('[id^="panel-btn-"]').forEach(b => b.classList.remove('panel-active'));
   if (!isOpen) {
     panel.classList.add('open');
     const btn = document.getElementById(`panel-btn-${name}`);
     if (btn) btn.classList.add('panel-active');
-    if (name==='backups') loadBackups(); if (name==='audit') loadAudit(); if (name==='status') loadStatusPanel(); if (name==='snippets') loadSnippets(); if (name==='logs') startLogs();
+    if (name==='backups') loadBackups(); if (name==='audit') loadAudit(); if (name==='status') loadStatusPanel(); if (name==='snippets') loadSnippets();
   }
 };
 window.closePanel = function(name) {
-  if (name === 'logs') stopLogs();
   document.getElementById(`panel-${name}`).classList.remove('open');
   document.querySelectorAll('[id^="panel-btn-"]').forEach(b => b.classList.remove('panel-active'));
 };

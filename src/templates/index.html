@@ -18,7 +18,6 @@
     <button class="btn btn-secondary" id="panel-btn-snippets" data-panel="snippets">Snippets</button>
     <button class="btn btn-secondary" id="panel-btn-backups" data-panel="backups">Backups</button>
     <button class="btn btn-secondary" id="panel-btn-audit" data-panel="audit">Audit</button>
-    <button class="btn btn-secondary" id="panel-btn-logs" data-panel="logs">Logs</button>
     <button class="btn btn-secondary" id="panel-btn-status" data-panel="status">Status</button>
   </div>
   <span class="spacer"></span>
@@ -29,6 +28,7 @@
 <div class="tabs">
   <div class="tab active" data-tab="editor">Editor</div>
   <div class="tab" data-tab="metrics">Metrics</div>
+  <div class="tab" data-tab="logs">Logs</div>
 </div>
 
 <div class="warnings" id="warnings"></div>
@@ -51,6 +51,10 @@
     <div style="padding:16px;overflow-y:auto;flex:1" id="metrics-body">
       <div id="metrics-loading">Loading metrics...</div>
     </div>
+  </div>
+
+  <div class="tab-content" id="tab-logs">
+    <div class="logs-body" id="logs-body"></div>
   </div>
 </div>
 
@@ -97,12 +101,6 @@
 <div class="panel" id="panel-audit">
   <div class="panel-header"><h3>Audit Log</h3><button class="panel-close" data-close="audit">&times;</button></div>
   <div class="panel-body" id="audit-list"></div>
-</div>
-
-<!-- Logs Panel -->
-<div class="panel" id="panel-logs">
-  <div class="panel-header"><h3>Caddy Logs</h3><button class="panel-close" data-close="logs">&times;</button></div>
-  <div class="panel-body logs-body" id="logs-body"></div>
 </div>
 
 <!-- Status Panel -->
