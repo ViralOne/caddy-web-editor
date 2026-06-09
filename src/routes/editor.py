@@ -249,7 +249,19 @@ def get_logs():
     if initial and start > 0 and lines:
         lines = lines[1:]
 
-    return jsonify({"exists": True, "path": path, "lines": lines, "pos": size})
+    return jsonify({"exists": True, "path": path, "lines": lines, "pos": size, "size": size})
+
+
+@editor_bp.route("/api/logs/ping", methods=["POST"])
+@login_required
+def ping_caddy():
+    """Hit Caddy's HTTP port to generate an access log entry for testing."""
+    caddy_host = CADDY_API_URL.replace(":2019", ":80")
+    try:
+        http_client.get(caddy_host, timeout=3, allow_redirects=False)
+    except Exception:
+        pass
+    return jsonify({"ok": True})
 
 
 @editor_bp.route("/api/snippets", methods=["GET"])

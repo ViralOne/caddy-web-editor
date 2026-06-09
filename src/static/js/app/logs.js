@@ -1,5 +1,5 @@
 // Logs tab: poll the Caddy log file and tail it incrementally.
-let logsPos = null, logsTimer = null;
+let logsPos = null, logsTimer = null, logsFileExisted = false;
 
 async function pollLogs() {
   try {
@@ -7,14 +7,19 @@ async function pollLogs() {
     const data = await res.json();
     const body = document.getElementById('logs-body');
     if (!data.exists) {
-      body.textContent = '';
-      const hint = el('div', 'metrics-hint');
-      hint.style.whiteSpace = 'pre-wrap';
-      hint.textContent = `No log file at ${data.path}.\n\nAdd a global log directive to your Caddyfile:\n\n{\n    log default {\n        output file ${data.path}\n        format json\n    }\n}\n\nThe caddy-logs volume is already shared between containers. Logs appear after the first request hits Caddy.`;
-      body.appendChild(hint);
+      if (!logsFileExisted) {
+        body.textContent = '';
+        const hint = el('div', 'metrics-hint');
+        hint.style.whiteSpace = 'pre-wrap';
+        hint.textContent = `No log file at ${data.path}.\n\nAdd a global log directive to your Caddyfile:\n\n{\n    log default {\n        output file ${data.path}\n        format json\n    }\n}\n\nThe caddy-logs volume is already shared between containers. Logs appear after the first request hits Caddy.`;
+        body.appendChild(hint);
+      }
       logsPos = null;
       return;
     }
+    logsFileExisted = true;
+    updateLogsStatus(data.size, body.children.length);
+    if (logsPos !== null && data.pos === logsPos) return;
     logsPos = data.pos;
     if (data.lines && data.lines.length) {
       const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
@@ -26,5 +31,22 @@ async function pollLogs() {
     }
   } catch (e) { /* keep polling */ }
 }
-function startLogs() { stopLogs(); const body = document.getElementById('logs-body'); body.textContent = ''; logsPos = null; pollLogs(); logsTimer = setInterval(pollLogs, 3000); }
+function updateLogsStatus(size, lineCount) {
+  const status = document.getElementById('logs-status');
+  let info = status.querySelector('.logs-info');
+  if (!info) {
+    status.textContent = '';
+    info = el('span', 'logs-info');
+    status.appendChild(info);
+    const spacer = el('span', 'spacer');
+    status.appendChild(spacer);
+    const btn = el('button', 'btn btn-secondary', 'Ping Caddy');
+    btn.style.cssText = 'padding:2px 8px;font-size:10px';
+    btn.onclick = async () => { btn.textContent = '...'; try { await fetch('/api/logs/ping', {method:'POST'}); } catch(e){} btn.textContent = 'Ping Caddy'; };
+    status.appendChild(btn);
+  }
+  const sizeKB = (size / 1024).toFixed(1);
+  info.textContent = 'File: ' + sizeKB + ' KB • Lines: ' + lineCount + ' • Polling every 3s';
+}
+function startLogs() { stopLogs(); const body = document.getElementById('logs-body'); body.textContent = ''; document.getElementById('logs-status').textContent = ''; logsPos = null; logsFileExisted = false; pollLogs(); logsTimer = setInterval(pollLogs, 3000); }
 function stopLogs() { if (logsTimer) { clearInterval(logsTimer); logsTimer = null; } }

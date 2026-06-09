@@ -168,6 +168,7 @@ The bundle (`editor.bundle.js`) is committed — no build step needed on the ser
 | `CADDY_API_URL` | no | `http://caddy:2019` | Caddy admin API address |
 | `CADDYFILE_PATH` | no | `/etc/caddy/Caddyfile` | Path to Caddyfile |
 | `BACKUP_DIR` | no | `/backups` | Backup storage directory |
+| `CADDY_LOG_FILE` | no | `/var/log/caddy/access.log` | Path to Caddy access log (must match Caddyfile) |
 
 ## API Endpoints
 
@@ -185,6 +186,8 @@ The bundle (`editor.bundle.js`) is committed — no build step needed on the ser
 | `GET /api/traffic` | Caddy Prometheus metrics (parsed) |
 | `GET /api/upstreams` | Upstream backend status |
 | `GET /api/status` | Caddy version and config validity |
+| `GET /api/logs` | Tail Caddy access log (supports `?pos=` for incremental) |
+| `POST /api/logs/ping` | Generate a test log entry by hitting Caddy |
 | `GET /api/audit` | Audit log entries |
 
 ## Commands
