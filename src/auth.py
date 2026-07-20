@@ -12,6 +12,15 @@ from .config import ALLOWED_DOMAIN, ALLOWED_EMAILS, AUTH_MODE, SERVER_URL, SESSI
 
 auth_bp = Blueprint("auth", __name__)
 
+# Remember the last signed-in account for 90 days so returning users can be
+# re-authenticated silently (prompt=none) and get the right account pre-selected.
+LOGIN_HINT_COOKIE = "last_login_hint"
+LOGIN_HINT_MAX_AGE = 60 * 60 * 24 * 90
+
+
+def _cookie_secure() -> bool:
+    return os.environ.get("SESSION_COOKIE_SECURE", "true").lower() != "false"
+
 
 def get_or_create_csrf() -> str:
     """Return the session CSRF token, creating one if absent."""
@@ -82,6 +91,14 @@ def login_required(f):
 def welcome():
     if AUTH_MODE == "cloudflare":
         return redirect("/")
+    # Returning users with a remembered account get a one-shot silent sign-in.
+    # `retry=1` is set after a silent attempt fails, so we don't loop.
+    if (
+        AUTH_MODE == "google"
+        and request.cookies.get(LOGIN_HINT_COOKIE)
+        and request.args.get("retry") != "1"
+    ):
+        return redirect("/login/silent")
     return render_template("welcome.html")
 
 
@@ -90,19 +107,58 @@ def login():
     if AUTH_MODE == "cloudflare":
         return redirect("/")
     redirect_uri = f"{SERVER_URL}/auth/callback"
-    return oauth.google.authorize_redirect(redirect_uri)
+    extra = {}
+    # Pre-select the account the user signed in with last time so even the
+    # interactive screen skips account selection.
+    login_hint = request.cookies.get(LOGIN_HINT_COOKIE)
+    if login_hint:
+        extra["login_hint"] = login_hint
+    return oauth.google.authorize_redirect(redirect_uri, **extra)
+
+
+@auth_bp.route("/login/silent")
+def login_silent():
+    """Attempt to sign in without any Google UI.
+
+    If the user still has a live Google session and has already granted
+    consent, Google returns a token with no screen shown. Otherwise it
+    redirects back with an error and we fall through to the visible button.
+    """
+    if AUTH_MODE == "cloudflare":
+        return redirect("/")
+    login_hint = request.cookies.get(LOGIN_HINT_COOKIE)
+    if not login_hint:
+        # No prior account known: a silent attempt can only fail, so skip it.
+        return redirect("/login")
+    session["silent_auth"] = True
+    redirect_uri = f"{SERVER_URL}/auth/callback"
+    return oauth.google.authorize_redirect(
+        redirect_uri, prompt="none", login_hint=login_hint
+    )
 
 
 @auth_bp.route("/auth/callback")
 def callback():
     if AUTH_MODE == "cloudflare":
         return redirect("/")
+    was_silent = session.pop("silent_auth", False)
+    if request.args.get("error"):
+        # prompt=none couldn't complete without interaction (e.g.
+        # login_required / interaction_required / consent_required).
+        # Fall back to the normal button instead of showing an error.
+        if was_silent:
+            return redirect("/welcome?retry=1")
+        return "OAuth error. <a href='/login'>Try again</a>", 400
     try:
         token = oauth.google.authorize_access_token()
     except Exception:
+        if was_silent:
+            return redirect("/welcome?retry=1")
         return "OAuth error. <a href='/login'>Try again</a>", 400
     userinfo = token.get("userinfo")
     if not userinfo:
+        if was_silent:
+            return redirect("/welcome?retry=1")
         return "Auth failed. <a href='/login'>Try again</a>", 401
 
     email = userinfo.get("email", "")
@@ -114,7 +170,16 @@ def callback():
     session["login_time"] = datetime.now().timestamp()
     session.permanent = True
     log_action("login", email)
-    return redirect("/")
+    resp = redirect("/")
+    resp.set_cookie(
+        LOGIN_HINT_COOKIE,
+        email,
+        max_age=LOGIN_HINT_MAX_AGE,
+        httponly=True,
+        samesite="Lax",
+        secure=_cookie_secure(),
+    )
+    return resp
 
 
 @auth_bp.route("/logout")
@@ -125,4 +190,7 @@ def logout():
     session.clear()
     if AUTH_MODE == "cloudflare":
         return redirect("/cdn-cgi/access/logout")
-    return redirect("/welcome")
+    # Forget the remembered account so /welcome doesn't silently sign back in.
+    resp = redirect("/welcome?retry=1")
+    resp.delete_cookie(LOGIN_HINT_COOKIE)
+    return resp
