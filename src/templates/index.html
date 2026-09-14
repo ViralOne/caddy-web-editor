@@ -36,8 +36,9 @@
 <div class="main">
   <div class="tab-content active" id="tab-editor">
     <div class="search-bar" id="search-bar">
-      <input type="text" id="search-input" placeholder="Find... (Esc to close)">
-      <button class="btn btn-secondary" data-act="search-next" style="padding:3px 8px;font-size:10px">Next</button>
+      <input type="text" id="search-input" placeholder="Find... (Enter next, Shift+Enter previous, Esc to close)">
+      <button class="btn btn-secondary" data-act="search-prev" title="Previous match (Shift+Enter)" style="padding:3px 8px;font-size:10px">&uarr;</button>
+      <button class="btn btn-secondary" data-act="search-next" title="Next match (Enter)" style="padding:3px 8px;font-size:10px">&darr;</button>
       <span style="color:#666;font-size:11px" id="match-count"></span>
       <input type="text" id="replace-input" placeholder="Replace with...">
       <button class="btn btn-secondary" data-act="replace-one" style="padding:3px 8px;font-size:10px">Replace</button>

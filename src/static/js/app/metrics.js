@@ -57,20 +57,51 @@ async function loadMetrics() {
   if (upstreams.upstreams && upstreams.upstreams.length > 0) {
     const table = el('div', 'upstream-table');
     const header = el('div', 'upstream-row upstream-header');
+    header.appendChild(el('span', 'upstream-cell', 'Domain'));
     header.appendChild(el('span', 'upstream-cell', 'Address'));
-    header.appendChild(el('span', 'upstream-cell', 'Active Reqs'));
+    header.appendChild(el('span', 'upstream-cell', 'In Flight'));
     header.appendChild(el('span', 'upstream-cell', 'Fails'));
     header.appendChild(el('span', 'upstream-cell', 'Health'));
     table.appendChild(header);
 
     upstreams.upstreams.forEach(u => {
       const row = el('div', 'upstream-row');
-      row.appendChild(el('span', 'upstream-cell upstream-addr', u.address));
-      row.appendChild(el('span', 'upstream-cell', (u.num_requests || 0).toString()));
 
+      const domainCell = el('span', 'upstream-cell upstream-domain');
+      if (u.domains && u.domains.length) {
+        domainCell.textContent = u.domains.join(', ');
+        domainCell.title = u.domains.join('\n');
+      } else {
+        domainCell.textContent = 'not in current config';
+        domainCell.className += ' muted';
+        domainCell.title = 'This upstream is still registered in the running process but no site in the loaded config proxies to it.';
+      }
+      row.appendChild(domainCell);
+
+      row.appendChild(el('span', 'upstream-cell upstream-addr', u.address));
+
+      // num_requests is a live gauge of requests being proxied right now, not a
+      // running total, so it reads 0 unless you happen to refresh mid-request.
+      const inFlight = u.num_requests || 0;
+      const flightCell = el('span', 'upstream-cell');
+      flightCell.textContent = inFlight.toString();
+      flightCell.title = 'Requests being proxied to this upstream at this instant. Not a cumulative total — see Per-Site Traffic below for totals.';
+      if (inFlight > 0) flightCell.style.color = '#ce93d8';
+      else flightCell.className += ' upstream-muted';
+      row.appendChild(flightCell);
+
+      // Without fail_duration, Caddy never records a failure here, so showing a
+      // hard 0 would imply "no failures" when it really means "not measured".
       const failCell = el('span', 'upstream-cell');
-      failCell.textContent = (u.fails || 0).toString();
-      if (u.fails > 0) failCell.style.color = '#ef5350';
+      if (u.passive_health) {
+        failCell.textContent = (u.fails || 0).toString();
+        failCell.title = 'Failed requests remembered within fail_duration.';
+        if (u.fails > 0) failCell.style.color = '#ef5350';
+      } else {
+        const badge = el('span', 'health-badge unknown has-tooltip', 'n/a');
+        badge.appendChild(el('span', 'badge-tooltip', 'Not measured. Caddy only counts failures when passive health checks are enabled, which needs fail_duration (default 0 = off). Add inside reverse_proxy { }:\n\nfail_duration 30s\nmax_fails 3\nunhealthy_status 5xx'));
+        failCell.appendChild(badge);
+      }
       row.appendChild(failCell);
 
       const healthVal = traffic.upstreams_healthy ? traffic.upstreams_healthy[u.address] : undefined;
@@ -90,6 +121,7 @@ async function loadMetrics() {
       table.appendChild(row);
     });
     upstreamSection.appendChild(table);
+    upstreamSection.appendChild(el('div', 'metrics-hint', 'In Flight is a live gauge (requests in progress right now), so it is normally 0. Caddy does not export per-upstream request totals; use Per-Site Traffic for cumulative counts.'));
   } else if (!upstreams.error) {
     upstreamSection.appendChild(el('div', 'metrics-hint', 'No upstreams registered. Caddy reports upstreams only after traffic flows through reverse_proxy.'));
   }

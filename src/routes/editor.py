@@ -95,8 +95,13 @@ def me():
 @editor_bp.route("/api/caddyfile", methods=["GET"])
 @login_required
 def get_caddyfile():
-    with open(CADDYFILE) as f:
-        content = f.read()
+    try:
+        with open(CADDYFILE) as f:
+            content = f.read()
+    except OSError as e:
+        return jsonify({
+            "error": f"Cannot read {CADDYFILE}: {e.strerror or e}",
+        }), 500
     return jsonify({"content": content, "version": _version(content)})
 
 

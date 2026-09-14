@@ -11,5 +11,5 @@ dependencies = [
     "gunicorn>=23.0.0",
 ]
 
-[tool.uv]
-dev-dependencies = []
+[dependency-groups]
+dev = []

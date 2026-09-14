@@ -1,0 +1,16 @@
+# Front proxy for LOCAL DEVELOPMENT ONLY.
+#
+# The editor's AUTH_MODE=cloudflare trusts the identity header that Cloudflare
+# Access normally sets. This stands in for Cloudflare so you can click through
+# the UI without Google OAuth. It grants everyone who can reach it full editor
+# access, which is why docker-compose.dev.yaml binds it to 127.0.0.1 only.
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	reverse_proxy caddy-editor:9090 {
+		header_up Cf-Access-Authenticated-User-Email dev@local
+	}
+}

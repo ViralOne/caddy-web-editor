@@ -141,6 +141,33 @@ docker compose up -d --build
 # open http://localhost:9090
 ```
 
+### No-OAuth dev stack
+
+To click through the UI without setting up Google OAuth:
+
+```bash
+./dev/run.sh up      # http://localhost:8888, signed in as dev@local
+./dev/run.sh down    # stop and remove volumes
+./dev/run.sh reset   # restore dev/run/Caddyfile from the seed
+./dev/run.sh big 600 # print a 600-site Caddyfile to stdout
+```
+
+`docker-compose.dev.yaml` starts three containers: a front Caddy that injects the
+`Cf-Access-Authenticated-User-Email` header the app's `AUTH_MODE=cloudflare`
+expects, the editor, and a second Caddy whose config the editor edits and
+reloads. The editor works on `dev/run/Caddyfile`, so your real Caddyfile is never
+touched.
+
+There is no authentication in this stack — every published port is bound to
+`127.0.0.1` for that reason. Never use it off localhost.
+
+### Tests
+
+```bash
+node tests/diff.test.mjs                        # diff correctness + performance
+python3 -m unittest discover -s tests -t .      # caddy wrapper, cache, session key
+```
+
 ## How Save & Reload Works
 
 1. Formats config with `caddy fmt`

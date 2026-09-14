@@ -1,0 +1,40 @@
+# Starting config for the local dev stack. dev/run.sh copies this to
+# dev/run/Caddyfile, which is the file the editor actually reads and writes, so
+# saving in the UI never dirties this seed.
+{
+	admin 0.0.0.0:2019
+	metrics
+}
+
+(access_log) {
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10mb
+			roll_keep 3
+		}
+		format json
+	}
+}
+
+http://hello.example.com {
+	import access_log
+	respond "hello from the dev target" 200
+}
+
+http://watch.example.com {
+	import access_log
+	reverse_proxy 127.0.0.1:8096
+}
+
+http://photos.example.com {
+	import access_log
+	reverse_proxy 127.0.0.1:2283 {
+		health_uri /
+		health_interval 30s
+	}
+}
+
+http://grafana.example.com {
+	import access_log
+	reverse_proxy http://127.0.0.1:3434
+}

@@ -15,4 +15,4 @@ COPY src/ src/
 
 EXPOSE 9090
 
-CMD ["uv", "run", "gunicorn", "app:app", "-b", "0.0.0.0:9090", "-w", "1", "--access-logfile", "-", "-c", "gunicorn.conf.py"]
+CMD ["uv", "run", "gunicorn", "app:app", "-b", "0.0.0.0:9090", "--access-logfile", "-", "-c", "gunicorn.conf.py"]

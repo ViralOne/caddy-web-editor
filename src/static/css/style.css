@@ -130,7 +130,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 /* Upstream table */
 .upstream-table { border: 1px solid #21262d; border-radius: 6px; overflow: hidden; }
-.upstream-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; padding: 8px 12px; border-bottom: 1px solid #21262d; align-items: center; }
+.upstream-row { display: grid; grid-template-columns: 2.2fr 1.8fr 0.8fr 0.8fr 1fr; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #21262d; align-items: center; }
+.upstream-domain { font-size: 11px; color: #c9d1d9; line-height: 1.5; word-break: break-word; }
+.upstream-domain .muted { color: #565f6a; }
+.upstream-muted { color: #565f6a; }
 .upstream-row:last-child { border-bottom: none; }
 .upstream-header { background: #0d1117; font-size: 10px; color: #607d8b; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
 .upstream-cell { font-size: 12px; }
@@ -149,3 +152,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .stat-pill { display: inline-flex; align-items: center; gap: 4px; background: #161b22; border-radius: 4px; padding: 4px 8px; border: 1px solid #21262d; }
 .stat-pill-label { font-size: 9px; color: #607d8b; text-transform: uppercase; }
 .stat-pill-value { font-size: 12px; font-weight: 600; }
+
+/* Find bar match highlighting */
+.cm-find-match { background: #3a3000; outline: 1px solid #6b5a00; border-radius: 2px; }
+/* Syntax highlighting colours the token, so force the text dark to stay legible
+   against the solid fill on the current match. */
+.cm-find-match-current, .cm-find-match-current span { background: #ffa726; color: #14161a !important; border-radius: 2px; font-weight: 600; }
+.cm-find-row { background: #2b2410 !important; }

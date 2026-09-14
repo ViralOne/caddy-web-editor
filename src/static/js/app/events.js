@@ -1,7 +1,7 @@
 // Global keyboard shortcuts, CSP-safe event delegation, and app bootstrap.
 // This script must load LAST: it calls init().
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { stopLogs(); document.querySelectorAll('.panel').forEach(p=>p.classList.remove('open')); document.querySelectorAll('[id^="panel-btn-"]').forEach(b=>b.classList.remove('panel-active')); document.getElementById('search-bar').classList.remove('open'); document.getElementById('save-diff-modal').classList.remove('open'); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { stopLogs(); document.querySelectorAll('.panel').forEach(p=>p.classList.remove('open')); document.querySelectorAll('[id^="panel-btn-"]').forEach(b=>b.classList.remove('panel-active')); window.closeSearch(); document.getElementById('save-diff-modal').classList.remove('open'); } });
 
 // Cmd/Ctrl+F opens the find/replace bar (capture phase to preempt the editor).
 document.addEventListener('keydown', e => {
@@ -21,6 +21,7 @@ document.addEventListener('click', e => {
     case 'save': return window.doSave();
     case 'find': return window.toggleSearch();
     case 'search-next': return window.searchNext();
+    case 'search-prev': return window.searchPrev();
     case 'replace-one': return window.replaceOne();
     case 'replace-all': return window.replaceAll();
     case 'search-close': return window.closeSearch();
@@ -32,5 +33,12 @@ document.addEventListener('click', e => {
   }
 });
 document.getElementById('search-input').addEventListener('input', () => window.doSearch());
+
+// Enter steps to the next match, Shift+Enter to the previous one.
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  if (e.shiftKey) window.searchPrev(); else window.searchNext();
+});
 
 init();

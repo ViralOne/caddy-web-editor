@@ -1,45 +1,122 @@
+import hashlib
 import os
 import re
 import subprocess
 import tempfile
+import threading
+import time
 
 DOMAIN_RE = re.compile(
     r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
 )
 
+CADDY_TIMEOUT = float(os.environ.get("CADDY_CMD_TIMEOUT", "20"))
 
-def caddy_fmt(content: str) -> str:
-    """Format Caddyfile content using caddy fmt."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".caddyfile", delete=False) as tmp:
+_CACHE_TTL = float(os.environ.get("CADDY_CACHE_TTL", "60"))
+_CACHE_MAX = 8
+_cache: dict[str, tuple[float, object]] = {}
+_cache_lock = threading.Lock()
+
+TIMED_OUT = -1
+NOT_FOUND = -2
+
+
+def _cache_key(kind: str, content: str) -> str:
+    return f"{kind}:{hashlib.sha256(content.encode()).hexdigest()}"
+
+
+def _cache_get(key: str):
+    now = time.monotonic()
+    with _cache_lock:
+        hit = _cache.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
+        if hit:
+            del _cache[key]
+    return None
+
+
+def _cache_put(key: str, value) -> None:
+    with _cache_lock:
+        if len(_cache) >= _CACHE_MAX:
+            for stale in [k for k, (exp, _) in _cache.items() if exp <= time.monotonic()]:
+                del _cache[stale]
+            while len(_cache) >= _CACHE_MAX:
+                del _cache[next(iter(_cache))]
+        _cache[key] = (time.monotonic() + _CACHE_TTL, value)
+
+
+def run_caddy(argv: list[str], timeout: float | None = None) -> tuple[int, str, str]:
+    """Run a caddy command. Returns (returncode, stdout, stderr).
+
+    Returns TIMED_OUT if the process had to be killed and NOT_FOUND if the caddy
+    binary is missing, rather than raising, so callers can report either as a
+    normal validation failure.
+    """
+    limit = CADDY_TIMEOUT if timeout is None else timeout
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=limit)
+        return result.returncode, result.stdout, result.stderr
+    except subprocess.TimeoutExpired:
+        return TIMED_OUT, "", f"caddy did not finish within {limit:g}s and was stopped"
+    except FileNotFoundError:
+        return NOT_FOUND, "", "the caddy binary was not found on PATH"
+
+
+def _run_on_temp_config(content: str, argv_for: callable) -> tuple[int, str, str]:
+    """Write content to a temp file and run caddy against it, always cleaning up."""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".caddyfile", delete=False
+    ) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
+    try:
+        return run_caddy(argv_for(tmp_path))
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
 
-    result = subprocess.run(
-        ["caddy", "fmt", tmp_path],
-        capture_output=True, text=True,
-    )
-    os.remove(tmp_path)
 
-    if result.returncode == 0 and result.stdout:
-        return result.stdout
-    return content
+def caddy_fmt(content: str) -> str:
+    """Format Caddyfile content using caddy fmt.
+
+    Formatting is best-effort: if caddy fails, times out, or is missing, the
+    content is returned unchanged and validation reports the real problem.
+    """
+    key = _cache_key("fmt", content)
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+
+    rc, stdout, _ = _run_on_temp_config(content, lambda p: ["caddy", "fmt", p])
+    formatted = stdout if rc == 0 and stdout else content
+    if rc >= 0:
+        _cache_put(key, formatted)
+    return formatted
 
 
 def caddy_validate(content: str) -> tuple[bool, str]:
     """Run caddy validate and return (is_valid, message)."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".caddyfile", delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+    key = _cache_key("validate", content)
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
 
-    result = subprocess.run(
-        ["caddy", "validate", "--config", tmp_path, "--adapter", "caddyfile"],
-        capture_output=True, text=True,
+    rc, stdout, stderr = _run_on_temp_config(
+        content,
+        lambda p: ["caddy", "validate", "--config", p, "--adapter", "caddyfile"],
     )
-    os.remove(tmp_path)
+    if rc == 0:
+        result = (True, "Config is valid")
+    else:
+        result = (False, stderr or stdout or f"caddy validate failed (exit {rc})")
 
-    if result.returncode == 0:
-        return True, "Config is valid"
-    return False, result.stderr or result.stdout
+    # Timeouts are transient, so don't remember them.
+    if rc >= 0:
+        _cache_put(key, result)
+    return result
 
 
 def smart_validate(content: str) -> list[str]:

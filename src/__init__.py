@@ -5,12 +5,38 @@ import secrets
 from flask import Flask, jsonify, request
 
 from .auth import auth_bp, csrf_valid, oauth
-from .config import AUTH_MODE
+from .config import AUTH_MODE, BACKUP_DIR
 from .routes.editor import editor_bp
 from .routes.ops import ops_bp
 
 # Known placeholder secrets that must never be used to sign real sessions.
 _INSECURE_SECRETS = {"", "dev-secret-change-me", "change-me-to-a-random-string"}
+
+
+def _persisted_secret_key() -> str:
+    """A generated secret that is stable across workers and restarts.
+
+    Every gunicorn worker calls create_app() separately, so generating a random
+    key per process would sign each worker's session cookies with a different
+    key and CSRF checks would fail whenever a request landed on another worker.
+    """
+    path = os.path.join(BACKUP_DIR, ".secret_key")
+    generated = secrets.token_hex(32)
+    try:
+        # Exclusive create so concurrent workers agree on one key.
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(fd, generated.encode())
+        finally:
+            os.close(fd)
+        return generated
+    except FileExistsError:
+        with open(path) as f:
+            existing = f.read().strip()
+        return existing or generated
+    except OSError:
+        # Read-only volume: fall back to a per-process key. Single-worker only.
+        return generated
 
 
 def create_app():
@@ -27,7 +53,7 @@ def create_app():
                 "SECRET_KEY must be set to a strong random value when AUTH_MODE=google. "
                 'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
             )
-        secret_key = secrets.token_hex(32)
+        secret_key = _persisted_secret_key()
     app.secret_key = secret_key
 
     app.config["PREFERRED_URL_SCHEME"] = "http"

@@ -19,8 +19,12 @@ window.doSave = async function() {
   if (valData.warnings && valData.warnings.length) { showWarnings(valData.warnings); setDot('yellow'); setStatus('Warnings found (review before saving)', 'warn'); if (!confirm('Warnings found:\n\n' + valData.warnings.join('\n') + '\n\nSave anyway?')) return; }
 
   // Pre-save live diff: show editor (new) vs the config currently on disk (current).
+  setStatus('Building diff preview...', 'info');
   let live = originalContent;
   try { const lr = await fetch('/api/caddyfile'); const ld = await lr.json(); live = ld.content; } catch (e) {}
+  // Yield a frame so the status above actually paints before the diff runs;
+  // rendering is synchronous and blocks the main thread on large files.
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
   renderDiffInto(document.getElementById('save-diff-content'), live, content);
   const proceed = await openSaveModal();
   if (!proceed) { setStatus('Save cancelled', 'info'); return; }

@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import subprocess
 from datetime import datetime
 
 import requests as http_client
@@ -9,6 +8,7 @@ from flask import Blueprint, jsonify
 
 from ..auth import login_required
 from ..config import AUDIT_LOG, BACKUP_DIR, CADDY_API_URL, CADDYFILE
+from ..validator import run_caddy
 
 ops_bp = Blueprint("ops", __name__)
 
@@ -32,14 +32,13 @@ def get_audit():
 @ops_bp.route("/api/status", methods=["GET"])
 @login_required
 def caddy_status():
-    result = subprocess.run(["caddy", "version"], capture_output=True, text=True)
-    version = result.stdout.strip() if result.returncode == 0 else "unknown"
+    rc, stdout, _ = run_caddy(["caddy", "version"], timeout=5)
+    version = stdout.strip() if rc == 0 else "unknown"
 
-    validate_result = subprocess.run(
-        ["caddy", "validate", "--config", CADDYFILE, "--adapter", "caddyfile"],
-        capture_output=True, text=True,
+    validate_rc, _, _ = run_caddy(
+        ["caddy", "validate", "--config", CADDYFILE, "--adapter", "caddyfile"]
     )
-    config_valid = validate_result.returncode == 0
+    config_valid = validate_rc == 0
 
     try:
         mtime = os.path.getmtime(CADDYFILE)
@@ -110,13 +109,86 @@ def metrics():
 def upstreams():
     try:
         resp = http_client.get(f"{CADDY_API_URL}/reverse_proxy/upstreams", timeout=5)
-        if resp.status_code == 200:
-            return jsonify({"upstreams": resp.json()})
-        return jsonify({"upstreams": [], "error": f"Caddy returned {resp.status_code}"})
+        if resp.status_code != 200:
+            return jsonify({"upstreams": [], "error": f"Caddy returned {resp.status_code}"})
+        rows = resp.json()
     except http_client.ConnectionError:
         return jsonify({"upstreams": [], "error": "Caddy admin API not reachable"})
     except Exception as e:
         return jsonify({"upstreams": [], "error": str(e)})
+
+    # Caddy's upstreams endpoint only reports the dial address, so join it with
+    # the running config to say which sites proxy there and which kinds of
+    # health check are configured.
+    detail = _get_upstream_detail()
+    enriched = []
+    for row in rows if isinstance(rows, list) else []:
+        info = detail.get(row.get("address"), {})
+        enriched.append({
+            **row,
+            "domains": info.get("domains", []),
+            # `fails` is only ever populated when passive health checking is on,
+            # which requires fail_duration > 0 (Caddy's default is 0 = off).
+            "passive_health": info.get("passive", False),
+            "active_health": info.get("active", False),
+        })
+    enriched.sort(key=lambda u: (not u["domains"], u["domains"][:1], u.get("address", "")))
+    return jsonify({"upstreams": enriched})
+
+
+def _get_upstream_detail():
+    """Map each upstream dial address to its sites and health-check config."""
+    try:
+        resp = http_client.get(f"{CADDY_API_URL}/config/apps/http/servers", timeout=3)
+        if resp.status_code != 200:
+            return {}
+        servers = resp.json()
+        if not isinstance(servers, dict):
+            return {}
+    except Exception:
+        return {}
+
+    detail = {}
+    for srv_config in servers.values():
+        if isinstance(srv_config, dict):
+            _walk_routes(srv_config.get("routes", []), [], detail)
+    for info in detail.values():
+        info["domains"] = sorted(info["domains"])
+    return detail
+
+
+def _walk_routes(routes, hosts, detail):
+    """Recursively collect reverse_proxy upstreams, carrying host matchers down.
+
+    reverse_proxy handlers are normally nested inside a subroute handler, so the
+    host matcher lives on an outer route.
+    """
+    if not isinstance(routes, list):
+        return
+    for route in routes:
+        if not isinstance(route, dict):
+            continue
+        route_hosts = list(hosts)
+        for match_set in route.get("match", []) or []:
+            if isinstance(match_set, dict):
+                route_hosts.extend(match_set.get("host", []) or [])
+        for handler in route.get("handle", []) or []:
+            if not isinstance(handler, dict):
+                continue
+            if handler.get("handler") == "reverse_proxy":
+                checks = handler.get("health_checks") or {}
+                passive = bool((checks.get("passive") or {}).get("fail_duration"))
+                active = bool(checks.get("active"))
+                for upstream in handler.get("upstreams", []) or []:
+                    dial = (upstream or {}).get("dial")
+                    if not dial:
+                        continue
+                    info = detail.setdefault(dial, {"domains": set(), "passive": False, "active": False})
+                    info["domains"].update(route_hosts)
+                    info["passive"] = info["passive"] or passive
+                    info["active"] = info["active"] or active
+            # subroute (and similar wrappers) nest another route list.
+            _walk_routes(handler.get("routes", []), route_hosts, detail)
 
 
 @ops_bp.route("/api/traffic", methods=["GET"])

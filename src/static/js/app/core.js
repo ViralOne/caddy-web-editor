@@ -34,6 +34,7 @@ function initEditor(content) {
         basicSetup,
         oneDark,
         caddyfileLanguage,
+        findHighlightExtension,
         EditorView.updateListener.of(update => {
           if (update.docChanged) setDot(getContent() !== originalContent ? 'yellow' : 'green');
           if (update.selectionSet) {
